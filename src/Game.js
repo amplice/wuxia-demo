@@ -154,6 +154,10 @@ export class Game {
     this.fighter1.addToScene(this.scene);
     this.fighter2.addToScene(this.scene);
 
+    // Attach swords — same approach as animation player (_startAnimPlayer)
+    this._attachWeapon(this.fighter1);
+    this._attachWeapon(this.fighter2);
+
     // AI
     if (this.mode === 'ai') {
       this.aiController = new AIController(this.difficulty);
@@ -164,6 +168,27 @@ export class Game {
     this.ui.showHUD();
     this.ui.hud.updateRoundPips(0, 0);
     this._startRound();
+  }
+
+  _attachWeapon(fighter) {
+    // Attach sword to hand bone — mirrors the animation player approach exactly
+    let handBone = null;
+    fighter.root.traverse((child) => {
+      if (child.isBone && (child.name === 'hand.R' || child.name === 'handR')) {
+        handBone = child;
+      }
+    });
+    if (handBone) {
+      const s = 1 / fighter.root.scale.x;
+      fighter.weapon.mesh.scale.setScalar(s);
+      handBone.add(fighter.weapon.mesh);
+      console.log(`Weapon attached to bone: ${handBone.name}, scale: ${s}`);
+    } else {
+      // Fallback: attach to root at approximate hand position
+      console.warn('No hand bone found, attaching weapon to root');
+      fighter.weapon.mesh.position.set(0.3, 1.2, 0);
+      fighter.root.add(fighter.weapon.mesh);
+    }
   }
 
   _startRound() {
@@ -323,23 +348,25 @@ export class Game {
   _processPlayerInput(fighter, playerIndex, dt) {
     if (fighter.state === FighterState.DEAD || fighter.state === FighterState.DYING) return;
 
+    const opponent = playerIndex === 0 ? this.fighter2 : this.fighter1;
     const frame = this.clock.frameCount;
     let isMoving = false;
 
-    // Movement - absolute left/right, converted to forward/back based on facing
+    // D = move toward opponent, A = move away from opponent
     if (this.input.isHeld(playerIndex, 'right')) {
-      if (fighter.facingRight) fighter.moveForward(dt); else fighter.moveBack(dt);
+      fighter.moveForward(dt, opponent);
       isMoving = true;
     } else if (this.input.isHeld(playerIndex, 'left')) {
-      if (fighter.facingRight) fighter.moveBack(dt); else fighter.moveForward(dt);
+      fighter.moveBack(dt, opponent);
       isMoving = true;
     }
 
+    // W/S = sidestep (orbit around opponent)
     if (this.input.isHeld(playerIndex, 'sideUp')) {
-      fighter.sidestep(dt, -1);
+      fighter.sidestep(dt, -1, opponent);
       isMoving = true;
     } else if (this.input.isHeld(playerIndex, 'sideDown')) {
-      fighter.sidestep(dt, 1);
+      fighter.sidestep(dt, 1, opponent);
       isMoving = true;
     }
 
@@ -363,20 +390,18 @@ export class Game {
 
     // Block (hold) / Parry (tap)
     if (this.input.consumeBuffer(playerIndex, 'block', frame)) {
-      // First frame = parry attempt, continued hold = block
       fighter.parry();
     } else if (this.input.isHeld(playerIndex, 'block')) {
       if (fighter.fsm.isActionable) {
         fighter.block();
       }
     } else if (fighter.state === FighterState.BLOCK) {
-      // Released block
       fighter.fsm.transition(FighterState.IDLE);
     }
 
     // Dodge
     if (this.input.consumeBuffer(playerIndex, 'dodge', frame)) {
-      fighter.dodge();
+      fighter.dodge(opponent);
     }
   }
 

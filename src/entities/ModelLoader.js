@@ -464,12 +464,21 @@ export class ModelLoader {
 
     // Find hand bones for weapon attachment
     const joints = {};
+    const allBoneNames = [];
     clone.traverse((child) => {
       if (child.isBone) {
-        if (child.name === 'hand.L') joints.handL = child;
-        if (child.name === 'hand.R') joints.handR = child;
+        allBoneNames.push(child.name);
+        const n = child.name.toLowerCase();
+        if (n === 'hand.r' || n === 'handr' || n === 'hand_r' || n === 'righthand' || n === 'hand.r.001') {
+          joints.handR = child;
+        }
+        if (n === 'hand.l' || n === 'handl' || n === 'hand_l' || n === 'lefthand' || n === 'hand.l.001') {
+          joints.handL = child;
+        }
       }
     });
+    console.log('GLB bones found:', allBoneNames);
+    console.log('Hand joints:', { handR: joints.handR?.name, handL: joints.handL?.name });
 
     // Set up AnimationMixer and register all clips as actions
     const mixer = new THREE.AnimationMixer(clone);

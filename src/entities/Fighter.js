@@ -78,17 +78,8 @@ export class Fighter {
     this.group = new THREE.Group();
     this.group.add(this.root);
 
-    // Weapon — always attach to right hand (attack animation uses right hand)
+    // Weapon — created here but attached by Game.js (same approach as animation player)
     this.weapon = new Weapon(weaponType);
-    const weaponHand = joints.handR || joints.handL;
-    if (weaponHand) {
-      // Counter-scale weapon for GLB models (model is scaled to 1.8 units, weapon needs inverse)
-      if (this.useClips && this.root.scale.x !== 1) {
-        const s = 1 / this.root.scale.x;
-        this.weapon.mesh.scale.setScalar(s);
-      }
-      weaponHand.add(this.weapon.mesh);
-    }
 
     // Trail effect
     const trailColor = this.isP2 ? 0x4488ff : 0xff4444;
@@ -143,6 +134,16 @@ export class Fighter {
 
     // Update animation based on state
     this._updateAnimation();
+
+    // Attack lunge — move toward opponent during active frames
+    if (opponent && this.state === FighterState.ATTACK_ACTIVE) {
+      const dx = opponent.position.x - this.position.x;
+      const dz = opponent.position.z - this.position.z;
+      const len = Math.sqrt(dx * dx + dz * dz) || 1;
+      const lungeSpeed = 4.0;
+      this.position.x += (dx / len) * lungeSpeed * dt;
+      this.position.z += (dz / len) * lungeSpeed * dt;
+    }
 
     // Update mixer for clip-based animations
     if (this.useClips && this.mixer) {
@@ -526,30 +527,57 @@ export class Fighter {
     }
   }
 
-  // Movement methods
-  moveForward(dt) {
+  // Movement methods — all relative to opponent position
+  moveForward(dt, opponent) {
     if (!this.fsm.isActionable) return;
-    const dir = this.facingRight ? 1 : -1;
-    this.position.x += dir * WALK_SPEED * dt;
+    if (opponent) {
+      const dx = opponent.position.x - this.position.x;
+      const dz = opponent.position.z - this.position.z;
+      const len = Math.sqrt(dx * dx + dz * dz) || 1;
+      this.position.x += (dx / len) * WALK_SPEED * dt;
+      this.position.z += (dz / len) * WALK_SPEED * dt;
+    } else {
+      const dir = this.facingRight ? 1 : -1;
+      this.position.x += dir * WALK_SPEED * dt;
+    }
     if (this.fsm.state === FighterState.IDLE) {
       this.fsm.transition(FighterState.WALK_FORWARD);
     }
   }
 
-  moveBack(dt) {
+  moveBack(dt, opponent) {
     if (!this.fsm.isActionable) return;
-    const dir = this.facingRight ? -1 : 1;
-    this.position.x += dir * WALK_SPEED * dt;
+    if (opponent) {
+      const dx = opponent.position.x - this.position.x;
+      const dz = opponent.position.z - this.position.z;
+      const len = Math.sqrt(dx * dx + dz * dz) || 1;
+      this.position.x -= (dx / len) * WALK_SPEED * dt;
+      this.position.z -= (dz / len) * WALK_SPEED * dt;
+    } else {
+      const dir = this.facingRight ? -1 : 1;
+      this.position.x += dir * WALK_SPEED * dt;
+    }
     if (this.fsm.state === FighterState.IDLE) {
       this.fsm.transition(FighterState.WALK_BACK);
     }
   }
 
-  sidestep(dt, direction) {
+  sidestep(dt, direction, opponent) {
     if (!this.fsm.isActionable) return;
     this._sidestepDir = direction;
-    // Simple Z-axis movement: W = away from camera (-Z), S = toward camera (+Z)
-    this.position.z += direction * SIDESTEP_SPEED * dt;
+    if (opponent) {
+      // Orbit around opponent — move perpendicular to fighter-opponent line
+      const dx = opponent.position.x - this.position.x;
+      const dz = opponent.position.z - this.position.z;
+      const len = Math.sqrt(dx * dx + dz * dz) || 1;
+      // Perpendicular: rotate 90 degrees
+      const perpX = -dz / len;
+      const perpZ = dx / len;
+      this.position.x += perpX * direction * SIDESTEP_SPEED * dt;
+      this.position.z += perpZ * direction * SIDESTEP_SPEED * dt;
+    } else {
+      this.position.z += direction * SIDESTEP_SPEED * dt;
+    }
     if (this.fsm.state === FighterState.IDLE) {
       this.fsm.transition(FighterState.SIDESTEP);
     }
@@ -587,11 +615,19 @@ export class Fighter {
     return this.fsm.startParry();
   }
 
-  dodge() {
+  dodge(opponent) {
     if (this.fsm.startDodge()) {
-      // Move backward during dodge
-      const dir = this.facingRight ? -1 : 1;
-      this.position.x += dir * 1.5;
+      // Dodge away from opponent
+      if (opponent) {
+        const dx = this.position.x - opponent.position.x;
+        const dz = this.position.z - opponent.position.z;
+        const len = Math.sqrt(dx * dx + dz * dz) || 1;
+        this.position.x += (dx / len) * 1.5;
+        this.position.z += (dz / len) * 1.5;
+      } else {
+        const dir = this.facingRight ? -1 : 1;
+        this.position.x += dir * 1.5;
+      }
       return true;
     }
     return false;

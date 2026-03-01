@@ -15,6 +15,7 @@ export class AIController {
   }
 
   update(fighter, opponent, frameCount, dt) {
+    this._opponent = opponent;
     // Throttle decisions by reaction time
     if (frameCount - this.lastDecisionFrame < this.personality.reactionFrames) {
       // Continue executing persistent actions (movement)
@@ -104,9 +105,9 @@ export class AIController {
     if (!this.currentAction || !fighter.fsm.isActionable) return;
 
     switch (this.currentAction) {
-      case 'moveForward': fighter.moveForward(dt); break;
-      case 'moveBack': fighter.moveBack(dt); break;
-      case 'sidestep': fighter.sidestep(dt, this.sideDir); break;
+      case 'moveForward': fighter.moveForward(dt, this._opponent); break;
+      case 'moveBack': fighter.moveBack(dt, this._opponent); break;
+      case 'sidestep': fighter.sidestep(dt, this.sideDir, this._opponent); break;
       case 'block':
         if (fighter.fsm.isActionable) fighter.block();
         break;
@@ -146,7 +147,7 @@ export class AIController {
         this.currentAction = null;
         break;
       case 'dodge':
-        fighter.dodge();
+        fighter.dodge(this._opponent);
         this.currentAction = null;
         break;
       case 'stanceChange':
@@ -154,14 +155,14 @@ export class AIController {
         this.currentAction = null;
         break;
       case 'moveForward':
-        fighter.moveForward(dt);
+        fighter.moveForward(dt, this._opponent);
         break;
       case 'moveBack':
-        fighter.moveBack(dt);
+        fighter.moveBack(dt, this._opponent);
         break;
       case 'sidestep':
         this.sideDir = Math.random() > 0.5 ? 1 : -1;
-        fighter.sidestep(dt, this.sideDir);
+        fighter.sidestep(dt, this.sideDir, this._opponent);
         break;
       case 'idle':
       default:
