@@ -99,8 +99,11 @@ export class AIController {
       }
     }
 
-    // Sidestep baseline (sidestep is lateral, safe near edge)
-    scores.sidestep = (scores.sidestep || 0) + 0.05 + noise();
+    // Sidestep — good defensive option, lateral so safe near edge
+    if (opponentAttacking) {
+      scores.sidestep = (scores.sidestep || 0) + 0.4 + noise();
+    }
+    scores.sidestep = (scores.sidestep || 0) + 0.15 + noise();
 
     // Movement — prefer staying at fighting distance, not retreating
     if (!inRange) {
