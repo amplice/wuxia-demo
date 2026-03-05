@@ -67,6 +67,10 @@ export class AIController {
     const p = this.personality;
     const noise = () => (Math.random() - 0.5) * p.decisionNoise;
 
+    // Arena edge awareness
+    const edgeDist = Math.sqrt(fighter.position.x ** 2 + fighter.position.z ** 2);
+    const nearEdge = edgeDist > 5.5; // ARENA_RADIUS is 8
+
     const scores = {};
 
     const inRange = dist < 2.5;
@@ -102,8 +106,15 @@ export class AIController {
     // Movement
     if (!inRange) {
       scores.moveForward = 0.6 + p.aggression * 0.3 + noise();
-    } else if (closeRange) {
+    } else if (closeRange && !nearEdge) {
       scores.moveBack = 0.2 + noise();
+    }
+
+    // Near edge: strongly prefer moving forward to get back to center
+    if (nearEdge) {
+      scores.moveForward = (scores.moveForward || 0) + 0.5;
+      scores.moveBack = 0;
+      scores.backstep = 0;
     }
 
     // Idle
