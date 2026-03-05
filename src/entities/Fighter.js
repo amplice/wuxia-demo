@@ -163,13 +163,6 @@ export class Fighter {
       this.position.x += dir * speed * dt;
     }
 
-    // Z-axis drift: gradually return to center line (Z=0) when not sidestepping
-    if (this.state !== FighterState.SIDESTEP && Math.abs(this.position.z) > 0.05) {
-      const driftSpeed = 1.5; // units per second
-      const driftAmount = Math.min(driftSpeed * dt, Math.abs(this.position.z));
-      this.position.z -= Math.sign(this.position.z) * driftAmount;
-    }
-
     // Update mixer for clip-based animations
     if (this.useClips && this.mixer) {
       this.mixer.update(dt);
