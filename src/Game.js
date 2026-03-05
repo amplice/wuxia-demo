@@ -338,16 +338,6 @@ export class Game {
     // Ring-out check
     this._checkRingOut();
 
-    // Line-lock: cap Z-offset between fighters so they never face fully vertical
-    const MAX_Z_OFFSET = 3.0;
-    const zDelta = this.fighter1.position.z - this.fighter2.position.z;
-    if (Math.abs(zDelta) > MAX_Z_OFFSET) {
-      const midZ = (this.fighter1.position.z + this.fighter2.position.z) / 2;
-      const halfMax = MAX_Z_OFFSET / 2;
-      this.fighter1.position.z = midZ + Math.sign(zDelta) * halfMax;
-      this.fighter2.position.z = midZ - Math.sign(zDelta) * halfMax;
-    }
-
     // Arena bounds — don't clamp fighters being pushed back (block/block stun)
     // so block pushback can cause ring out
     const noClamp = (s) => s === FighterState.BLOCK || s === FighterState.BLOCK_STUN || s === FighterState.CLASH;

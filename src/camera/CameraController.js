@@ -11,6 +11,9 @@ export class CameraController {
     this.targetLookAt = new THREE.Vector3();
     this.currentLookAt = new THREE.Vector3();
 
+    // Camera orbit angle (radians, 0 = +Z side)
+    this.orbitAngle = 0;
+
     // Shake
     this.shakeIntensity = 0;
     this.shakeDecay = 0.9;
@@ -45,11 +48,22 @@ export class CameraController {
     const dist = fighter1.distanceTo(fighter2);
     const zoomDist = clamp(5 + dist * 0.8, 5, 14);
 
-    // Fixed side-view camera (always from +Z looking toward origin)
+    // Compute the angle of the line between fighters
+    const dx = fighter2.position.x - fighter1.position.x;
+    const dz = fighter2.position.z - fighter1.position.z;
+    // Perpendicular angle: we want to look from the side
+    // atan2(dz, dx) gives the fighter line angle; add PI/2 for perpendicular
+    const fighterLineAngle = Math.atan2(dz, dx);
+    const targetOrbit = fighterLineAngle + Math.PI / 2;
+
+    // Smoothly rotate camera orbit to match (using shortest-path angle lerp)
+    this.orbitAngle = this._lerpAngle(this.orbitAngle, targetOrbit, 0.03);
+
+    // Position camera using orbit angle
     this.targetPosition.set(
-      midX,
+      midX + Math.cos(this.orbitAngle) * zoomDist * 0.3,
       midY + 2.5,
-      midZ + zoomDist
+      midZ + Math.sin(this.orbitAngle) * zoomDist
     );
 
     this.targetLookAt.set(midX, midY, midZ);
@@ -72,6 +86,14 @@ export class CameraController {
     }
 
     this.camera.lookAt(this.currentLookAt);
+  }
+
+  _lerpAngle(a, b, t) {
+    // Shortest-path angle interpolation
+    let diff = b - a;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    return a + diff * t;
   }
 
   _updateKillCam(dt) {
@@ -109,6 +131,7 @@ export class CameraController {
     this.shakeIntensity = 0;
     this.killCamActive = false;
     this.killCamTarget = null;
+    this.orbitAngle = 0;
     this._needsSnap = true;
   }
 }
