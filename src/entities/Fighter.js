@@ -142,11 +142,12 @@ export class Fighter {
     // Update animation based on state
     this._updateAnimation();
 
-    // Attack lunge — use attackData.lunge during active frames
+    // Attack lunge — move toward opponent during active frames
     if (this.state === FighterState.ATTACK_ACTIVE && this.currentAttackData) {
       const lungeSpeed = this.currentAttackData.lunge / this.currentAttackData.active * 60;
-      const dir = this.facingRight ? 1 : -1;
-      this.position.x += dir * lungeSpeed * dt;
+      const angle = this.group.rotation.y;
+      this.position.x += Math.sin(angle) * lungeSpeed * dt;
+      this.position.z += Math.cos(angle) * lungeSpeed * dt;
     }
 
     // Sidestep movement — dash phase only
