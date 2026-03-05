@@ -67,9 +67,10 @@ export class AIController {
     const p = this.personality;
     const noise = () => (Math.random() - 0.5) * p.decisionNoise;
 
-    // Arena edge awareness
+    // Arena position awareness
     const edgeDist = Math.sqrt(fighter.position.x ** 2 + fighter.position.z ** 2);
-    const nearEdge = edgeDist > 5.5; // ARENA_RADIUS is 8
+    const nearEdge = edgeDist > 4.0;
+    const dangerEdge = edgeDist > 6.0;
 
     const scores = {};
 
@@ -92,29 +93,32 @@ export class AIController {
       scores.block = 0.5 + noise();
       scores.parry = p.parryRate + noise();
       scores.sidestep = 0.3 + noise();
-      scores.backstep = 0.2 + noise();
+      // Only backstep if not near edge
+      if (!nearEdge) {
+        scores.backstep = 0.2 + noise();
+      }
     }
 
-    // Sidestep baseline
+    // Sidestep baseline (sidestep is lateral, safe near edge)
     scores.sidestep = (scores.sidestep || 0) + 0.05 + noise();
 
-    // Backstep when too close and opponent is aggressive
-    if (closeRange && opponentAttacking) {
-      scores.backstep = (scores.backstep || 0) + 0.2 + noise();
-    }
-
-    // Movement
+    // Movement — prefer staying at fighting distance, not retreating
     if (!inRange) {
       scores.moveForward = 0.6 + p.aggression * 0.3 + noise();
-    } else if (closeRange && !nearEdge) {
-      scores.moveBack = 0.2 + noise();
+    }
+    // Only retreat at close range if far from edge
+    if (closeRange && !nearEdge) {
+      scores.moveBack = 0.1 + noise();
     }
 
-    // Near edge: strongly prefer moving forward to get back to center
+    // Center pull: the further from center, the more AI wants to move forward
     if (nearEdge) {
-      scores.moveForward = (scores.moveForward || 0) + 0.5;
+      scores.moveForward = (scores.moveForward || 0) + 0.4;
       scores.moveBack = 0;
       scores.backstep = 0;
+    }
+    if (dangerEdge) {
+      scores.moveForward = (scores.moveForward || 0) + 0.6;
     }
 
     // Idle
