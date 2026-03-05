@@ -67,7 +67,7 @@ export const KILL_DAMAGE = 1;
 // Sidestep
 export const SIDESTEP_DASH_FRAMES = 12;
 export const SIDESTEP_DASH_DISTANCE = 2.0;
-export const SIDESTEP_RECOVERY_FRAMES = 10;
+export const SIDESTEP_RECOVERY_FRAMES = 4;
 
 // Backstep
 export const BACKSTEP_FRAMES = 10;
