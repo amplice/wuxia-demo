@@ -28,9 +28,13 @@ export class HitResolver {
       return { result: HitResult.WHIFF };
     }
 
-    // Priority 4: Parry -> Parried
-    if (defender.state === FighterState.PARRY && defender.stateFrames <= PARRY_WINDOW_FRAMES) {
-      return { result: HitResult.PARRIED };
+    // Priority 4: Parry -> Parried (within window), or Blocked (past window but still in parry state)
+    if (defender.state === FighterState.PARRY) {
+      if (defender.stateFrames <= PARRY_WINDOW_FRAMES) {
+        return { result: HitResult.PARRIED };
+      }
+      // Past parry window but still in PARRY state — treat as block
+      return { result: HitResult.BLOCKED };
     }
 
     // Priority 5: Block -> Blocked (no zone check, blocks everything)

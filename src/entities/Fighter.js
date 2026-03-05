@@ -515,8 +515,10 @@ export class Fighter {
     const ind = this._stateIndicator;
     const s = this.state;
 
-    ind.block.visible = (s === FighterState.BLOCK || s === FighterState.BLOCK_STUN);
-    ind.parry.visible = (s === FighterState.PARRY);
+    const parryActive = s === FighterState.PARRY && this.fsm.stateFrames <= 5;
+    const parryFallback = s === FighterState.PARRY && this.fsm.stateFrames > 5;
+    ind.block.visible = (s === FighterState.BLOCK || s === FighterState.BLOCK_STUN || parryFallback);
+    ind.parry.visible = parryActive;
     ind.success.visible = (s === FighterState.PARRY_SUCCESS);
 
     // Spin the active indicator
