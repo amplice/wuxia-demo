@@ -235,20 +235,26 @@ export class Fighter {
         speed = 0.2;
         break;
 
-      case FighterState.ATTACK_STARTUP:
+      case FighterState.ATTACK_STARTUP: {
+        const heavy = this.fsm.currentAttackType === AttackType.HEAVY;
         pose = getAttackPose(this.fsm.currentAttackType, 'startup');
-        speed = 0.25;
+        speed = heavy ? 0.12 : 0.25;
         break;
+      }
 
-      case FighterState.ATTACK_ACTIVE:
+      case FighterState.ATTACK_ACTIVE: {
+        const heavy = this.fsm.currentAttackType === AttackType.HEAVY;
         pose = getAttackPose(this.fsm.currentAttackType, 'active');
-        speed = 0.35;
+        speed = heavy ? 0.18 : 0.35;
         break;
+      }
 
-      case FighterState.ATTACK_RECOVERY:
+      case FighterState.ATTACK_RECOVERY: {
+        const heavy = this.fsm.currentAttackType === AttackType.HEAVY;
         pose = getStancePose();
-        speed = 0.1;
+        speed = heavy ? 0.05 : 0.1;
         break;
+      }
 
       case FighterState.BLOCK:
       case FighterState.BLOCK_STUN:
@@ -393,7 +399,8 @@ export class Fighter {
         break;
     }
 
-    const t = 0.15;
+    const isHeavyAttack = this.fsm.isAttacking && this.fsm.currentAttackType === AttackType.HEAVY;
+    const t = isHeavyAttack ? 0.07 : 0.15;
     const r = this.root;
 
     if (this._fbxBaseScale == null) {
@@ -561,7 +568,10 @@ export class Fighter {
     const result = this.fsm.startAttack(type);
     if (result && this.useClips && this.clipActions.attack) {
       const action = this.clipActions.attack;
-      const clipDuration = action.getClip().duration;
+      const isHeavy = type === AttackType.HEAVY;
+      const timeScale = isHeavy ? 0.5 : 1.0;
+      action.timeScale = timeScale;
+      const clipDuration = action.getClip().duration / timeScale;
       const fsmFrames = Math.ceil(clipDuration * 60);
       this.fsm.currentAttackData = {
         ...this.fsm.currentAttackData,
