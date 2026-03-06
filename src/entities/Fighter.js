@@ -627,13 +627,20 @@ export class Fighter {
     this.root.traverse((child) => {
       if (child.isBone) {
         const snapshot = child.rotation.clone();
+        const n = child.name.toLowerCase();
+        const isLimb = n.includes('arm') || n.includes('hand') || n.includes('leg') ||
+                       n.includes('foot') || n.includes('shin') || n.includes('thigh') ||
+                       n.includes('forearm') || n.includes('elbow') || n.includes('knee') ||
+                       n.includes('shoulder') || n.includes('calf') || n.includes('wrist');
+        const strength = isLimb ? 3.0 : 0.3;
         bones.push({
           bone: child,
           startRot: snapshot,
-          velX: (Math.random() - 0.5) * 0.8,
-          velY: (Math.random() - 0.5) * 0.5,
-          velZ: (Math.random() - 0.5) * 0.8,
-          damping: 0.94,
+          velX: (Math.random() - 0.5) * strength,
+          velY: (Math.random() - 0.5) * strength * 0.6,
+          velZ: (Math.random() - 0.5) * strength,
+          damping: isLimb ? 0.96 : 0.94,
+          isLimb,
         });
       }
     });
@@ -653,8 +660,8 @@ export class Fighter {
       velZ: dirZ * 0.8,
       rootStartX: this.root.rotation.x,
       rootStartZ: this.root.rotation.z,
-      rootTargetX: this.root.rotation.x + (0.8 + Math.random() * 0.5) * (Math.random() > 0.5 ? 1 : -1),
-      rootTargetZ: this.root.rotation.z + (Math.random() - 0.5) * 0.6,
+      rootTargetX: this.root.rotation.x + (Math.PI / 2 + Math.random() * 0.3) * (Math.random() > 0.5 ? 1 : -1),
+      rootTargetZ: this.root.rotation.z + (Math.random() - 0.5) * 0.8,
       rootProgress: 0,
       bones,
       time: 0,
@@ -663,32 +670,45 @@ export class Fighter {
 
   _updateRagdoll(dt) {
     const r = this._ragdoll;
-    r.time += dt;
+    // Use real time so ragdoll isn't frozen during slowmo
+    const now = performance.now() / 1000;
+    const realDt = r.lastTime ? Math.min(now - r.lastTime, 0.05) : dt;
+    r.lastTime = now;
+    r.time += realDt;
 
-    // Slide along ground (stumble)
-    this.position.x += r.velX * dt;
-    this.position.z += r.velZ * dt;
-    r.velX *= (1 - 3 * dt);
-    r.velZ *= (1 - 3 * dt);
+    // Stumble slide
+    this.position.x += r.velX * realDt;
+    this.position.z += r.velZ * realDt;
+    r.velX *= (1 - 3 * realDt);
+    r.velZ *= (1 - 3 * realDt);
 
-    // Gradually tilt the root to collapse — slow dramatic fall
-    r.rootProgress = Math.min(r.rootProgress + dt * 1.2, 1);
-    const ease = r.rootProgress * r.rootProgress; // ease-in
+    // Gradually tilt the root to collapse
+    r.rootProgress = Math.min(r.rootProgress + realDt * 0.8, 1);
+    const ease = r.rootProgress * r.rootProgress;
     this.root.rotation.x = r.rootStartX + (r.rootTargetX - r.rootStartX) * ease;
     this.root.rotation.z = r.rootStartZ + (r.rootTargetZ - r.rootStartZ) * ease;
 
-    // Lower the body as it falls
-    const dropAmount = Math.min(ease * 0.5, 0.5);
-    this.position.y = -dropAmount;
+    // Compensate Y based on tilt direction
+    // Forward fall (positive X rot) pushes body down — needs lift
+    // Backward fall (negative X rot) raises body — needs none
+    const forwardTilt = Math.max(0, this.root.rotation.x) * 0.4;
+    const backwardTilt = Math.max(0, -this.root.rotation.x) * 0.2;
+    const sideTilt = Math.abs(this.root.rotation.z) * 0.15;
+    this.position.y = Math.max(0, forwardTilt + backwardTilt + sideTilt);
 
-    // Bones go gently limp — small drift
+    // Bones go limp — limbs flop more
     for (const b of r.bones) {
-      b.bone.rotation.x += b.velX * dt;
-      b.bone.rotation.y += b.velY * dt;
-      b.bone.rotation.z += b.velZ * dt;
-      b.velX *= b.damping;
-      b.velY *= b.damping;
-      b.velZ *= b.damping;
+      b.bone.rotation.x += b.velX * realDt;
+      b.bone.rotation.y += b.velY * realDt;
+      b.bone.rotation.z += b.velZ * realDt;
+      // Limbs get gravity pull
+      if (b.isLimb) {
+        b.velX += (Math.random() - 0.5) * 2 * realDt;
+        b.velZ += (Math.random() - 0.5) * 2 * realDt;
+      }
+      b.velX *= Math.pow(b.damping, realDt * 60);
+      b.velY *= Math.pow(b.damping, realDt * 60);
+      b.velZ *= Math.pow(b.damping, realDt * 60);
     }
   }
 

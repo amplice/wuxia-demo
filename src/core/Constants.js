@@ -84,8 +84,8 @@ export const RING_OUT_RADIUS = 8.5;
 export const FIGHT_START_DISTANCE = 4.0;
 
 // Kill cam
-export const KILL_SLOWMO_SCALE = 0.15;
-export const KILL_SLOWMO_DURATION = 3.5;
+export const KILL_SLOWMO_SCALE = 0.3;
+export const KILL_SLOWMO_DURATION = 3.0;
 
 // Match
 export const ROUNDS_TO_WIN = 3;

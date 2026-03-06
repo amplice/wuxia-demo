@@ -105,7 +105,7 @@ export class FighterStateMachine {
   }
 
   startDying() {
-    this.transition(FighterState.DYING, 180);
+    this.transition(FighterState.DYING, 360);
   }
 
   update() {

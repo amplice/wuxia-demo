@@ -43,7 +43,7 @@ export class ParticleSystem {
     this.mesh.instanceMatrix.needsUpdate = true;
 
     // InstancedMesh for blood (normal blending — visible as dark red)
-    const bloodGeo = new THREE.SphereGeometry(0.025, 4, 3);
+    const bloodGeo = new THREE.SphereGeometry(0.1, 5, 4);
     const bloodMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
@@ -136,50 +136,50 @@ export class ParticleSystem {
   emitBlood(position, count = 12) {
     // Bright red droplets
     this._emitToPool(this.bloodParticles, position, count, {
-      color: new THREE.Color(0.8, 0, 0),
-      speed: 4,
-      spread: 2,
-      life: 0.6,
-      size: 1.8,
+      color: new THREE.Color(0.8, 0.0, 0.0),
+      speed: 5,
+      spread: 3,
+      life: 1.5,
+      size: 4,
       gravity: -6,
     });
-    // Darker spray
+    // Darker drops
     this._emitToPool(this.bloodParticles, position, Math.floor(count * 0.6), {
-      color: new THREE.Color(0.4, 0, 0),
+      color: new THREE.Color(0.5, 0.0, 0.0),
       speed: 3,
-      spread: 1.5,
-      life: 0.8,
-      size: 2.5,
+      spread: 2,
+      life: 2.0,
+      size: 5,
       gravity: -4,
     });
   }
 
   emitBloodGush(position, count = 40) {
-    // Big death spray
+    // Big death spray — long life to survive slowmo
     this._emitToPool(this.bloodParticles, position, count, {
-      color: new THREE.Color(0.7, 0, 0),
-      speed: 6,
-      spread: 3,
-      life: 1.2,
-      size: 2.0,
-      gravity: -5,
+      color: new THREE.Color(0.8, 0.0, 0.0),
+      speed: 8,
+      spread: 4,
+      life: 4.0,
+      size: 5,
+      gravity: -4,
     });
-    // Fine mist
+    // Lingering mist
     this._emitToPool(this.bloodParticles, position, Math.floor(count * 0.5), {
-      color: new THREE.Color(0.5, 0.0, 0.0),
-      speed: 2,
-      spread: 2,
-      life: 1.5,
-      size: 3.5,
+      color: new THREE.Color(0.6, 0.0, 0.0),
+      speed: 3,
+      spread: 3,
+      life: 5.0,
+      size: 8,
       gravity: -1,
     });
-    // Dark drips
+    // Heavy drips
     this._emitToPool(this.bloodParticles, position, Math.floor(count * 0.3), {
-      color: new THREE.Color(0.25, 0, 0),
-      speed: 1.5,
-      spread: 1,
-      life: 1.8,
-      size: 1.5,
+      color: new THREE.Color(0.3, 0.0, 0.0),
+      speed: 2,
+      spread: 1.5,
+      life: 5.0,
+      size: 3,
       gravity: -8,
     });
   }
