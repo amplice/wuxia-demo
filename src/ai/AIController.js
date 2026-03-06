@@ -1,5 +1,5 @@
 import { AI_PRESETS } from './AIPersonality.js';
-import { FighterState, AttackType } from '../core/Constants.js';
+import { FighterState, AttackType, WALK_SPEED } from '../core/Constants.js';
 
 const MAX_BLOCK_FRAMES = 40; // ~0.67s max block hold
 
@@ -145,8 +145,8 @@ export class AIController {
     if (!this.currentAction || !fighter.fsm.isActionable) return;
 
     switch (this.currentAction) {
-      case 'moveForward': fighter.moveForward(dt); break;
-      case 'moveBack': fighter.moveBack(dt); break;
+      case 'moveForward': this._aiMoveToward(fighter, dt); break;
+      case 'moveBack': this._aiMoveAway(fighter, dt); break;
       case 'block':
         if (fighter.fsm.isActionable) fighter.block();
         break;
@@ -192,16 +192,34 @@ export class AIController {
         this.currentAction = null;
         break;
       case 'moveForward':
-        fighter.moveForward(dt);
+        this._aiMoveToward(fighter, dt);
         break;
       case 'moveBack':
-        fighter.moveBack(dt);
+        this._aiMoveAway(fighter, dt);
         break;
       case 'idle':
       default:
         fighter.stopMoving();
         this.currentAction = null;
         break;
+    }
+  }
+
+  _aiMoveToward(fighter, dt) {
+    if (!fighter.fsm.isActionable) return;
+    const dir = this._opponent.position.x > fighter.position.x ? 1 : -1;
+    fighter.position.x += dir * WALK_SPEED * dt;
+    if (fighter.fsm.state === FighterState.IDLE || fighter.fsm.state === FighterState.PARRY_SUCCESS) {
+      fighter.fsm.transition(FighterState.WALK_FORWARD);
+    }
+  }
+
+  _aiMoveAway(fighter, dt) {
+    if (!fighter.fsm.isActionable) return;
+    const dir = this._opponent.position.x > fighter.position.x ? -1 : 1;
+    fighter.position.x += dir * WALK_SPEED * dt;
+    if (fighter.fsm.state === FighterState.IDLE || fighter.fsm.state === FighterState.PARRY_SUCCESS) {
+      fighter.fsm.transition(FighterState.WALK_BACK);
     }
   }
 

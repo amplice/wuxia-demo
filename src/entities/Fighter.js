@@ -88,6 +88,9 @@ export class Fighter {
     // Walk cycle timer
     this.walkPhase = 0;
     this._sidestepDir = 0;
+
+    // Ragdoll state
+    this._ragdoll = null;
   }
 
   _createStateIndicators() {
@@ -126,6 +129,14 @@ export class Fighter {
   set hitApplied(v) { this.fsm.hitApplied = v; }
 
   update(dt, opponent) {
+    // Ragdoll physics override
+    if (this._ragdoll) {
+      this._updateRagdoll(dt);
+      if (this.useClips && this.mixer) this.mixer.update(dt);
+      this._updateTrail();
+      return;
+    }
+
     // Face toward opponent — but lock facing and rotation during attacks
     if (opponent) {
       if (!this.fsm.isAttacking) {
@@ -150,17 +161,24 @@ export class Fighter {
       this.position.z += Math.cos(angle) * lungeSpeed * dt;
     }
 
-    // Sidestep movement — fixed Z axis
+    // Sidestep movement — perpendicular to facing direction
     if (this.state === FighterState.SIDESTEP && this.fsm.sidestepPhase === 'dash') {
       const speed = SIDESTEP_DASH_DISTANCE / SIDESTEP_DASH_FRAMES * 60;
-      this.position.z += this.fsm.sidestepDirection * speed * dt;
+      const angle = this.group.rotation.y;
+      // Perpendicular to facing: rotate 90 degrees
+      const perpX = -Math.cos(angle) * this.fsm.sidestepDirection;
+      const perpZ = Math.sin(angle) * this.fsm.sidestepDirection;
+      this.position.x += perpX * speed * dt;
+      this.position.z += perpZ * speed * dt;
     }
 
-    // Backstep movement — away from opponent on X axis
+    // Backstep movement — away from opponent
     if (this.state === FighterState.DODGE) {
       const speed = BACKSTEP_DISTANCE / BACKSTEP_FRAMES * 60;
-      const dir = this.facingRight ? -1 : 1;
-      this.position.x += dir * speed * dt;
+      const angle = this.group.rotation.y;
+      // Backward = opposite of facing
+      this.position.x -= Math.sin(angle) * speed * dt;
+      this.position.z -= Math.cos(angle) * speed * dt;
     }
 
     // Update mixer for clip-based animations
@@ -603,6 +621,77 @@ export class Fighter {
     );
   }
 
+  startRagdoll(dirX, dirZ) {
+    // Snapshot current bone rotations BEFORE stopping animations
+    const bones = [];
+    this.root.traverse((child) => {
+      if (child.isBone) {
+        const snapshot = child.rotation.clone();
+        bones.push({
+          bone: child,
+          startRot: snapshot,
+          velX: (Math.random() - 0.5) * 0.8,
+          velY: (Math.random() - 0.5) * 0.5,
+          velZ: (Math.random() - 0.5) * 0.8,
+          damping: 0.94,
+        });
+      }
+    });
+
+    // Stop animations, then restore the snapshot so we don't snap to T-pose
+    if (this.useClips && this.mixer) {
+      this.mixer.stopAllAction();
+    }
+    for (const b of bones) {
+      b.bone.rotation.copy(b.startRot);
+    }
+
+    // Small stumble backward, no big launch
+    this._ragdoll = {
+      velX: dirX * 0.8,
+      velY: 0,
+      velZ: dirZ * 0.8,
+      rootStartX: this.root.rotation.x,
+      rootStartZ: this.root.rotation.z,
+      rootTargetX: this.root.rotation.x + (0.8 + Math.random() * 0.5) * (Math.random() > 0.5 ? 1 : -1),
+      rootTargetZ: this.root.rotation.z + (Math.random() - 0.5) * 0.6,
+      rootProgress: 0,
+      bones,
+      time: 0,
+    };
+  }
+
+  _updateRagdoll(dt) {
+    const r = this._ragdoll;
+    r.time += dt;
+
+    // Slide along ground (stumble)
+    this.position.x += r.velX * dt;
+    this.position.z += r.velZ * dt;
+    r.velX *= (1 - 3 * dt);
+    r.velZ *= (1 - 3 * dt);
+
+    // Gradually tilt the root to collapse — slow dramatic fall
+    r.rootProgress = Math.min(r.rootProgress + dt * 1.2, 1);
+    const ease = r.rootProgress * r.rootProgress; // ease-in
+    this.root.rotation.x = r.rootStartX + (r.rootTargetX - r.rootStartX) * ease;
+    this.root.rotation.z = r.rootStartZ + (r.rootTargetZ - r.rootStartZ) * ease;
+
+    // Lower the body as it falls
+    const dropAmount = Math.min(ease * 0.5, 0.5);
+    this.position.y = -dropAmount;
+
+    // Bones go gently limp — small drift
+    for (const b of r.bones) {
+      b.bone.rotation.x += b.velX * dt;
+      b.bone.rotation.y += b.velY * dt;
+      b.bone.rotation.z += b.velZ * dt;
+      b.velX *= b.damping;
+      b.velY *= b.damping;
+      b.velZ *= b.damping;
+    }
+  }
+
   resetForRound(xPos) {
     this.position.set(xPos, 0, 0);
     this.group.rotation.y = xPos < 0 ? Math.PI / 2 : -Math.PI / 2;
@@ -612,6 +701,10 @@ export class Fighter {
     this.trail.stop();
     this.walkPhase = 0;
     this._sidestepDir = 0;
+    this._ragdoll = null;
+    this.root.rotation.x = 0;
+    this.root.rotation.z = 0;
+    this.position.y = 0;
 
     if (this.useClips && this.mixer) {
       this.mixer.stopAllAction();

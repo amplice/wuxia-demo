@@ -26,7 +26,12 @@ export class FighterStateMachine {
     return this.state === FighterState.IDLE ||
            this.state === FighterState.WALK_FORWARD ||
            this.state === FighterState.WALK_BACK ||
-           this.state === FighterState.PARRY_SUCCESS;
+           this.state === FighterState.PARRY_SUCCESS ||
+           this.isSidestepRecovery;
+  }
+
+  get isSidestepRecovery() {
+    return this.state === FighterState.SIDESTEP && this.sidestepPhase === 'recovery';
   }
 
   get isAttacking() {
@@ -66,7 +71,7 @@ export class FighterStateMachine {
   }
 
   startSidestep(direction) {
-    if (!this.isActionable) return false;
+    if (!this.isActionable || this.isSidestepRecovery) return false;
     this.sidestepDirection = direction;
     this.sidestepPhase = 'dash';
     this.transition(FighterState.SIDESTEP, SIDESTEP_DASH_FRAMES + SIDESTEP_RECOVERY_FRAMES);
@@ -100,7 +105,7 @@ export class FighterStateMachine {
   }
 
   startDying() {
-    this.transition(FighterState.DYING, 60);
+    this.transition(FighterState.DYING, 180);
   }
 
   update() {

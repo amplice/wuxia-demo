@@ -66,8 +66,8 @@ export const KILL_DAMAGE = 1;
 
 // Sidestep
 export const SIDESTEP_DASH_FRAMES = 12;
-export const SIDESTEP_DASH_DISTANCE = 2.0;
-export const SIDESTEP_RECOVERY_FRAMES = 0;
+export const SIDESTEP_DASH_DISTANCE = 1.4;
+export const SIDESTEP_RECOVERY_FRAMES = 4;
 
 // Backstep
 export const BACKSTEP_FRAMES = 10;
@@ -85,7 +85,7 @@ export const FIGHT_START_DISTANCE = 4.0;
 
 // Kill cam
 export const KILL_SLOWMO_SCALE = 0.15;
-export const KILL_SLOWMO_DURATION = 1.5;
+export const KILL_SLOWMO_DURATION = 3.5;
 
 // Match
 export const ROUNDS_TO_WIN = 3;

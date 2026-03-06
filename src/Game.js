@@ -17,7 +17,7 @@ import {
   GameState, FighterState, AttackType, HitResult, WeaponType,
   FIGHT_START_DISTANCE, ROUNDS_TO_WIN, ROUND_INTRO_DURATION,
   ROUND_END_DELAY, KILL_SLOWMO_SCALE, KILL_SLOWMO_DURATION,
-  FRAME_DURATION, ARENA_RADIUS, BLOCK_PUSHBACK_SPEED,
+  FRAME_DURATION, ARENA_RADIUS, BLOCK_PUSHBACK_SPEED, WALK_SPEED,
 } from './core/Constants.js';
 
 export class Game {
@@ -332,6 +332,9 @@ export class Game {
     this._applyBlockPushback(this.fighter1, this.fighter2, dt);
     this._applyBlockPushback(this.fighter2, this.fighter1, dt);
 
+    // Fighter collision — push apart if too close
+    this._enforceFighterSeparation(this.fighter1, this.fighter2);
+
     // Check combat hits
     this._checkHits();
 
@@ -376,12 +379,21 @@ export class Game {
     const frame = this.clock.frameCount;
     let isMoving = false;
 
-    // D = move right (+X), A = move left (-X)
+    // D = toward enemy, A = away from enemy
+    const opponent = (fighter === this.fighter1) ? this.fighter2 : this.fighter1;
     if (this.input.isHeld(playerIndex, 'right')) {
-      fighter.moveForward(dt);
+      const dir = opponent.position.x >= fighter.position.x ? 1 : -1;
+      fighter.position.x += dir * WALK_SPEED * dt;
+      if (fighter.fsm.isActionable && (fighter.state === FighterState.IDLE || fighter.state === FighterState.PARRY_SUCCESS)) {
+        fighter.fsm.transition(FighterState.WALK_FORWARD);
+      }
       isMoving = true;
     } else if (this.input.isHeld(playerIndex, 'left')) {
-      fighter.moveBack(dt);
+      const dir = opponent.position.x >= fighter.position.x ? -1 : 1;
+      fighter.position.x += dir * WALK_SPEED * dt;
+      if (fighter.fsm.isActionable && (fighter.state === FighterState.IDLE || fighter.state === FighterState.PARRY_SUCCESS)) {
+        fighter.fsm.transition(FighterState.WALK_BACK);
+      }
       isMoving = true;
     }
 
@@ -489,6 +501,7 @@ export class Game {
         defender.fsm.applyHitStun();
         this._pushApart(attacker, defender, 0.3);
         this.particles.emitSparks(contactPoint, 8);
+        this.particles.emitBlood(contactPoint, 15);
         this.cameraController.shake(0.25);
         this.screenEffects.flashRed();
         this.screenEffects.startHitstop(6);
@@ -504,9 +517,15 @@ export class Game {
   _onKill(killer, victim) {
     victim.fsm.startDying();
 
+    // Ragdoll the victim away from killer
+    const dx = victim.position.x - killer.position.x;
+    const dz = victim.position.z - killer.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz) || 0.01;
+    victim.startRagdoll(dx / dist, dz / dist);
+
     const pos = victim.position.clone();
     pos.y += 1.0;
-    this.particles.emitInkSplash(pos, 40);
+    this.particles.emitBloodGush(pos, 50);
 
     this.clock.setTimeScale(KILL_SLOWMO_SCALE);
     this.killSlowMoTimer = 0;
@@ -578,6 +597,22 @@ export class Game {
     this._debugArrow2.setDirection(d2);
     this._debugArrow2.position.copy(this.fighter2.position);
     this._debugArrow2.position.y = 0.05;
+  }
+
+  _enforceFighterSeparation(a, b) {
+    const MIN_DIST = 0.8;
+    const dx = b.position.x - a.position.x;
+    const dz = b.position.z - a.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < MIN_DIST && dist > 0.001) {
+      const overlap = (MIN_DIST - dist) / 2;
+      const nx = dx / dist;
+      const nz = dz / dist;
+      a.position.x -= nx * overlap;
+      a.position.z -= nz * overlap;
+      b.position.x += nx * overlap;
+      b.position.z += nz * overlap;
+    }
   }
 
   _pushApart(a, b, force) {
