@@ -5,8 +5,8 @@ export class CharacterSelect {
 
     this.mode = 'ai';
     this.difficulty = 'medium';
-    this.p1Weapon = 'jian';
-    this.p2Weapon = 'dao';
+    this.p1Char = 'dao';
+    this.p2Char = 'spear';
 
     this._setupButtons();
   }
@@ -18,7 +18,6 @@ export class CharacterSelect {
         document.querySelectorAll('#mode-options .select-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.mode = btn.dataset.mode;
-        // Show/hide difficulty for AI mode
         document.getElementById('difficulty-section').style.display =
           this.mode === 'ai' ? 'block' : 'none';
       });
@@ -33,21 +32,21 @@ export class CharacterSelect {
       });
     });
 
-    // P1 weapon buttons
-    document.querySelectorAll('#p1-weapon-options .select-btn').forEach(btn => {
+    // P1 character buttons
+    document.querySelectorAll('#p1-char-options .select-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('#p1-weapon-options .select-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('#p1-char-options .select-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        this.p1Weapon = btn.dataset.weapon;
+        this.p1Char = btn.dataset.char;
       });
     });
 
-    // P2 weapon buttons
-    document.querySelectorAll('#p2-weapon-options .select-btn').forEach(btn => {
+    // P2 character buttons
+    document.querySelectorAll('#p2-char-options .select-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('#p2-weapon-options .select-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('#p2-char-options .select-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        this.p2Weapon = btn.dataset.weapon;
+        this.p2Char = btn.dataset.char;
       });
     });
 
@@ -57,8 +56,8 @@ export class CharacterSelect {
         this.onConfirm({
           mode: this.mode,
           difficulty: this.difficulty,
-          p1Weapon: this.p1Weapon,
-          p2Weapon: this.p2Weapon,
+          p1Char: this.p1Char,
+          p2Char: this.p2Char,
         });
       }
     });

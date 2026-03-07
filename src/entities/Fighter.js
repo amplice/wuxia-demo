@@ -45,6 +45,10 @@ export class Fighter {
       this.mixer = result.mixer;
       this.clipActions = result.actions;
       this.useClips = true;
+      // Apply model-specific root rotation (e.g. Mixamo models face -Z, need PI flip)
+      if (fightAnimData.rootRotationY) {
+        root.rotation.y = fightAnimData.rootRotationY;
+      }
     } else if (modelData) {
       const tint = this.isP2 ? 0xaabbff : 0xffcccc;
       const result = ModelLoader.createFighterFromModel(
@@ -85,9 +89,13 @@ export class Fighter {
     this.position = this.group.position;
     this.facingRight = !this.isP2;
 
+    // Walk speed multiplier (per-character)
+    this.walkSpeedMult = (weaponType === WeaponType.SPEAR) ? 0.25 : 1.0;
+
     // Walk cycle timer
     this.walkPhase = 0;
     this._sidestepDir = 0;
+
 
     // Ragdoll state
     this._ragdoll = null;
@@ -161,15 +169,10 @@ export class Fighter {
       this.position.z += Math.cos(angle) * lungeSpeed * dt;
     }
 
-    // Sidestep movement — perpendicular to facing direction
+    // Sidestep movement — Z axis dash during dash phase
     if (this.state === FighterState.SIDESTEP && this.fsm.sidestepPhase === 'dash') {
       const speed = SIDESTEP_DASH_DISTANCE / SIDESTEP_DASH_FRAMES * 60;
-      const angle = this.group.rotation.y;
-      // Perpendicular to facing: rotate 90 degrees
-      const perpX = -Math.cos(angle) * this.fsm.sidestepDirection;
-      const perpZ = Math.sin(angle) * this.fsm.sidestepDirection;
-      this.position.x += perpX * speed * dt;
-      this.position.z += perpZ * speed * dt;
+      this.position.z += this.fsm.sidestepDirection * speed * dt;
     }
 
     // Backstep movement — away from opponent
@@ -446,6 +449,14 @@ export class Fighter {
     let clipName = 'idle';
     let loopOnce = false;
 
+    // Helper to pick first available clip name
+    const pick = (...names) => {
+      for (const n of names) {
+        if (this.clipActions[n]) return n;
+      }
+      return names[names.length - 1];
+    };
+
     switch (state) {
       case FighterState.IDLE:
       case FighterState.BLOCK:
@@ -460,23 +471,33 @@ export class Fighter {
         break;
 
       case FighterState.WALK_FORWARD:
-        clipName = 'walk_right';
+        clipName = pick('walk_forward', 'walk_right');
         break;
 
       case FighterState.WALK_BACK:
-        clipName = 'walk_left';
+        clipName = pick('walk_backward', 'walk_left');
         break;
 
       case FighterState.SIDESTEP:
-        clipName = this.fsm.sidestepDirection > 0 ? 'walk_right' : 'walk_left';
+        if (this.fsm.sidestepDirection > 0) {
+          clipName = pick('strafe_right', 'walk_right', 'walk_forward');
+        } else {
+          clipName = pick('strafe_left', 'walk_left', 'walk_backward');
+        }
         break;
 
       case FighterState.ATTACK_STARTUP:
       case FighterState.ATTACK_ACTIVE:
-      case FighterState.ATTACK_RECOVERY:
-        clipName = 'attack';
+      case FighterState.ATTACK_RECOVERY: {
+        const isHeavy = this.fsm.currentAttackType === AttackType.HEAVY;
+        if (isHeavy) {
+          clipName = pick('attack_heavy', 'attack');
+        } else {
+          clipName = pick('attack_quick', 'attack');
+        }
         loopOnce = true;
         break;
+      }
 
       case FighterState.DYING:
       case FighterState.DEAD:
@@ -589,19 +610,27 @@ export class Fighter {
 
   attack(type) {
     const result = this.fsm.startAttack(type);
-    if (result && this.useClips && this.clipActions.attack) {
-      const action = this.clipActions.attack;
+    if (result && this.useClips) {
       const isHeavy = type === AttackType.HEAVY;
-      const timeScale = isHeavy ? 0.5 : 1.0;
-      action.timeScale = timeScale;
-      const clipDuration = action.getClip().duration / timeScale;
-      const fsmFrames = Math.ceil(clipDuration * 60);
-      this.fsm.currentAttackData = {
-        ...this.fsm.currentAttackData,
-        startup: 1,
-        active: fsmFrames,
-        recovery: 1,
-      };
+      // Find the right clip: prefer separate quick/heavy, fall back to single 'attack'
+      const clipName = isHeavy
+        ? (this.clipActions.attack_heavy ? 'attack_heavy' : 'attack')
+        : (this.clipActions.attack_quick ? 'attack_quick' : 'attack');
+      const action = this.clipActions[clipName];
+      if (action) {
+        // Only adjust timeScale if using a single shared attack clip
+        const hasSeparateClips = this.clipActions.attack_quick || this.clipActions.attack_heavy;
+        const timeScale = (!hasSeparateClips && isHeavy) ? 0.5 : 1.0;
+        action.timeScale = timeScale;
+        const clipDuration = action.getClip().duration / timeScale;
+        const fsmFrames = Math.ceil(clipDuration * 60);
+        this.fsm.currentAttackData = {
+          ...this.fsm.currentAttackData,
+          startup: 1,
+          active: fsmFrames,
+          recovery: 1,
+        };
+      }
     }
     return result;
   }

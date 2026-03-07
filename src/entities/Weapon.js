@@ -15,7 +15,18 @@ export class Weapon {
   _build() {
     const s = this.stats;
 
-    if (this.type === WeaponType.STAFF) {
+    if (this.type === WeaponType.SPEAR) {
+      // Spear - thin long cylinder
+      const geo = new THREE.CylinderGeometry(0.01, 0.01, s.length, 6);
+      geo.translate(0, s.length / 2, 0);
+      const mat = new THREE.MeshStandardMaterial({
+        color: s.color,
+        roughness: 0.7,
+        metalness: 0.2,
+      });
+      this.bladeMesh = new THREE.Mesh(geo, mat);
+      this.group.add(this.bladeMesh);
+    } else if (this.type === WeaponType.STAFF) {
       // Staff - long cylinder
       const geo = new THREE.CylinderGeometry(s.width, s.width * 0.8, s.length, 6);
       geo.translate(0, s.length / 2, 0);

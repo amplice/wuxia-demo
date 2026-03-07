@@ -162,11 +162,10 @@ export class FighterStateMachine {
       case FighterState.SIDESTEP:
         if (this.sidestepPhase === 'dash' && this.stateFrames >= SIDESTEP_DASH_FRAMES) {
           this.sidestepPhase = 'recovery';
-          // Don't reset stateFrames — keep counting for total duration
-        }
-        if (this.stateFrames >= SIDESTEP_DASH_FRAMES + SIDESTEP_RECOVERY_FRAMES) {
-          this.sidestepPhase = null;
+          this.stateFrames = 0;
+        } else if (this.sidestepPhase === 'recovery' && this.stateFrames >= SIDESTEP_RECOVERY_FRAMES) {
           this.sidestepDirection = 0;
+          this.sidestepPhase = null;
           this.transition(FighterState.IDLE);
         }
         break;

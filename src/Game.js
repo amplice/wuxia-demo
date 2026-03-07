@@ -13,6 +13,7 @@ import { ParticleSystem } from './vfx/ParticleSystem.js';
 import { ScreenEffects } from './vfx/ScreenEffects.js';
 import { AIController } from './ai/AIController.js';
 import { UIManager } from './ui/UIManager.js';
+import { PoseBrowser } from './ui/PoseBrowser.js';
 import {
   GameState, FighterState, AttackType, HitResult, WeaponType,
   FIGHT_START_DISTANCE, ROUNDS_TO_WIN, ROUND_INTRO_DURATION,
@@ -40,6 +41,7 @@ export class Game {
     this.aiController = null;
     this.modelData = null;
     this.fightAnimData = null;
+    this.spearmanAnimData = null;
 
     this.gameState = GameState.TITLE;
     this.stateTimer = 0;
@@ -87,6 +89,15 @@ export class Game {
       this.fightAnimData = null;
     }
 
+    // Preload spearman animations
+    try {
+      this.spearmanAnimData = await ModelLoader.loadSpearmanAnimations();
+      console.log('Spearman animations loaded successfully');
+    } catch (err) {
+      console.warn('Failed to load spearman animations:', err);
+      this.spearmanAnimData = null;
+    }
+
     if (!this.fightAnimData) {
       try {
         this.modelData = await ModelLoader.load();
@@ -108,7 +119,7 @@ export class Game {
     this.ui.select.onConfirm = (config) => {
       this.mode = config.mode;
       this.difficulty = config.difficulty;
-      this._startMatch(config.p1Weapon, config.p2Weapon);
+      this._startMatch(config.p1Char, config.p2Char);
     };
 
     this.ui.victory.onContinue = () => {
@@ -119,6 +130,10 @@ export class Game {
 
     this.ui.title.onAnimPlayer = () => {
       this._startAnimPlayer();
+    };
+
+    this.ui.title.onPoseBrowser = () => {
+      this._startPoseBrowser();
     };
 
     this.ui.animPlayer.onBack = () => {
@@ -138,15 +153,24 @@ export class Game {
     this._loop();
   }
 
-  _startMatch(p1Weapon, p2Weapon) {
+  _getCharData(charType) {
+    if (charType === 'spear' && this.spearmanAnimData) {
+      return { animData: this.spearmanAnimData, weapon: WeaponType.SPEAR };
+    }
+    return { animData: this.fightAnimData, weapon: WeaponType.DAO };
+  }
+
+  _startMatch(p1Char, p2Char) {
     this.p1Score = 0;
     this.p2Score = 0;
     this.currentRound = 1;
 
     this._cleanupFighters();
 
-    this.fighter1 = new Fighter(0, 0x991111, p1Weapon, this.modelData, this.fightAnimData);
-    this.fighter2 = new Fighter(1, 0x112266, p2Weapon, this.modelData, this.fightAnimData);
+    const p1 = this._getCharData(p1Char);
+    const p2 = this._getCharData(p2Char);
+    this.fighter1 = new Fighter(0, 0x991111, p1.weapon, this.modelData, p1.animData);
+    this.fighter2 = new Fighter(1, 0x112266, p2.weapon, this.modelData, p2.animData);
     this.fighter1.addToScene(this.scene);
     this.fighter2.addToScene(this.scene);
 
@@ -178,8 +202,11 @@ export class Game {
   _attachWeapon(fighter) {
     let handBone = null;
     fighter.root.traverse((child) => {
-      if (child.isBone && (child.name === 'hand.R' || child.name === 'handR')) {
-        handBone = child;
+      if (child.isBone) {
+        const n = child.name.toLowerCase();
+        if (n === 'hand.r' || n === 'handr' || n === 'mixamorig:righthand') {
+          handBone = child;
+        }
       }
     });
     if (handBone) {
@@ -271,6 +298,16 @@ export class Game {
   _renderUpdate(dt) {
     if (this.gameState === GameState.ANIM_PLAYER) {
       this._updateAnimPlayer(dt);
+      return;
+    }
+
+    if (this.gameState === GameState.POSE_BROWSER) {
+      if (this._poseBrowserMixer) {
+        this._poseBrowserMixer.update(dt);
+      }
+      this.camera.position.set(2, 2, 3);
+      this.camera.lookAt(0, 0.9, 0);
+      this.environment.update(dt);
       return;
     }
 
@@ -381,16 +418,18 @@ export class Game {
 
     // D = toward enemy, A = away from enemy
     const opponent = (fighter === this.fighter1) ? this.fighter2 : this.fighter1;
+    // D/A = continuous walk toward/away from opponent
+    const speed = WALK_SPEED * fighter.walkSpeedMult;
     if (this.input.isHeld(playerIndex, 'right')) {
       const dir = opponent.position.x >= fighter.position.x ? 1 : -1;
-      fighter.position.x += dir * WALK_SPEED * dt;
+      fighter.position.x += dir * speed * dt;
       if (fighter.fsm.isActionable && (fighter.state === FighterState.IDLE || fighter.state === FighterState.PARRY_SUCCESS)) {
         fighter.fsm.transition(FighterState.WALK_FORWARD);
       }
       isMoving = true;
     } else if (this.input.isHeld(playerIndex, 'left')) {
       const dir = opponent.position.x >= fighter.position.x ? -1 : 1;
-      fighter.position.x += dir * WALK_SPEED * dt;
+      fighter.position.x += dir * speed * dt;
       if (fighter.fsm.isActionable && (fighter.state === FighterState.IDLE || fighter.state === FighterState.PARRY_SUCCESS)) {
         fighter.fsm.transition(FighterState.WALK_BACK);
       }
@@ -401,7 +440,7 @@ export class Game {
       fighter.stopMoving();
     }
 
-    // W/S = sidestep (committed dash, consumed from buffer)
+    // W/S = committed sidestep (tap to dash on Z axis)
     if (this.input.consumeBuffer(playerIndex, 'sidestepUp', frame)) {
       fighter.sidestep(-1);
     } else if (this.input.consumeBuffer(playerIndex, 'sidestepDown', frame)) {
@@ -841,6 +880,64 @@ export class Game {
         this.animPlayerModel.position.set(0, 0, 0);
         this.animPlayerModel.rotation.y = 0;
       }
+    }
+  }
+
+  // ── Pose Browser Mode ──────────────────────────────
+
+  async _startPoseBrowser() {
+    this._cleanupFighters();
+    this.gameState = GameState.POSE_BROWSER;
+
+    // Load the GLB model (reuse cached fightAnimData if available)
+    let modelData = this.fightAnimData;
+    if (!modelData) {
+      modelData = await ModelLoader.loadFightAnimations();
+    }
+
+    // Create a clone of the model for browsing
+    const result = ModelLoader.createFighterFromGLB(
+      modelData.model, modelData.clips, null, modelData.texture
+    );
+    this._poseBrowserRoot = result.root;
+    this._poseBrowserMixer = result.mixer;
+
+    // Attach weapon
+    if (result.joints.handR) {
+      const wpn = new Weapon(WeaponType.DAO);
+      const s = 1 / result.root.scale.x;
+      wpn.mesh.scale.setScalar(s);
+      result.joints.handR.add(wpn.mesh);
+    }
+
+    this.scene.add(this._poseBrowserRoot);
+
+    // Set up animation browser UI
+    this._poseBrowser = new PoseBrowser();
+    this._poseBrowser.onBack = () => {
+      this._stopPoseBrowser();
+      this.gameState = GameState.TITLE;
+      this.ui.showTitle();
+    };
+    await this._poseBrowser.loadData(this._poseBrowserMixer, this._poseBrowserRoot);
+    this._poseBrowser.show();
+
+    this.ui.hideAll();
+    this.cameraController.stopKillCam();
+  }
+
+  _stopPoseBrowser() {
+    if (this._poseBrowserRoot) {
+      this.scene.remove(this._poseBrowserRoot);
+      this._poseBrowserRoot = null;
+    }
+    if (this._poseBrowserMixer) {
+      this._poseBrowserMixer.stopAllAction();
+      this._poseBrowserMixer = null;
+    }
+    if (this._poseBrowser) {
+      this._poseBrowser.hide();
+      this._poseBrowser = null;
     }
   }
 

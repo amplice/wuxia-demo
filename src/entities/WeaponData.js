@@ -25,4 +25,12 @@ export const WEAPON_STATS = {
     color: 0x886644,
     guardSize: 0,
   },
+  [WeaponType.SPEAR]: {
+    name: 'Spear',
+    description: 'Long thrusting weapon',
+    length: 2.0,
+    width: 0.02,
+    color: 0x886644,
+    guardSize: 0,
+  },
 };

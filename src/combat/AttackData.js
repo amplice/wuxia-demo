@@ -10,6 +10,7 @@ const WEAPON_MODS = {
   [WeaponType.JIAN]: { startupMod: 0, reachMod: 0, recoveryMod: 0 },
   [WeaponType.DAO]: { startupMod: 1, reachMod: 0.1, recoveryMod: -1 },
   [WeaponType.STAFF]: { startupMod: 2, reachMod: 0.4, recoveryMod: 2 },
+  [WeaponType.SPEAR]: { startupMod: 1, reachMod: 0.5, recoveryMod: 1 },
 };
 
 export function getAttackData(attackType, weaponType = WeaponType.JIAN) {

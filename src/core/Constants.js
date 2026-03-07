@@ -8,6 +8,7 @@ export const GameState = {
   ROUND_END: 'round_end',
   VICTORY: 'victory',
   ANIM_PLAYER: 'anim_player',
+  POSE_BROWSER: 'pose_browser',
 };
 
 // Fighter states
@@ -51,6 +52,7 @@ export const WeaponType = {
   JIAN: 'jian',
   DAO: 'dao',
   STAFF: 'staff',
+  SPEAR: 'spear',
 };
 
 // Timing constants (in frames at 60fps)
