@@ -19,6 +19,7 @@ import {
   FIGHT_START_DISTANCE, ROUNDS_TO_WIN, ROUND_INTRO_DURATION,
   ROUND_END_DELAY, KILL_SLOWMO_SCALE, KILL_SLOWMO_DURATION,
   FRAME_DURATION, ARENA_RADIUS, BLOCK_PUSHBACK_SPEED, WALK_SPEED,
+  STEP_DISTANCE, STEP_FRAMES, STEP_COOLDOWN_FRAMES,
 } from './core/Constants.js';
 
 export class Game {
@@ -421,32 +422,50 @@ export class Game {
     const frame = this.clock.frameCount;
     let isMoving = false;
 
-    // D = toward enemy, A = away from enemy (along facing direction)
+    // D = toward enemy, A = away from enemy (discrete steps)
     const opponent = (fighter === this.fighter1) ? this.fighter2 : this.fighter1;
-    const speed = WALK_SPEED * fighter.walkSpeedMult;
     const dx = opponent.position.x - fighter.position.x;
     const dz = opponent.position.z - fighter.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz) || 0.01;
     const nx = dx / dist;
     const nz = dz / dist;
 
-    if (this.input.isHeld(playerIndex, 'right')) {
-      fighter.position.x += nx * speed * dt;
-      fighter.position.z += nz * speed * dt;
-      if (fighter.fsm.isActionable && (fighter.state === FighterState.IDLE || fighter.state === FighterState.PARRY_SUCCESS)) {
-        fighter.fsm.transition(FighterState.WALK_FORWARD);
-      }
+    // Process active step
+    if (fighter._stepping) {
+      const stepSpeed = STEP_DISTANCE / STEP_FRAMES * 60;
+      fighter.position.x += nx * fighter._stepDirection * stepSpeed * dt;
+      fighter.position.z += nz * fighter._stepDirection * stepSpeed * dt;
+      fighter._stepFrames++;
       isMoving = true;
-    } else if (this.input.isHeld(playerIndex, 'left')) {
-      fighter.position.x -= nx * speed * dt;
-      fighter.position.z -= nz * speed * dt;
-      if (fighter.fsm.isActionable && (fighter.state === FighterState.IDLE || fighter.state === FighterState.PARRY_SUCCESS)) {
-        fighter.fsm.transition(FighterState.WALK_BACK);
+
+      if (fighter._stepFrames >= STEP_FRAMES) {
+        fighter._stepping = false;
+        fighter._stepFrames = 0;
+        fighter._stepCooldown = STEP_COOLDOWN_FRAMES;
       }
-      isMoving = true;
     }
 
-    if (!isMoving && fighter.fsm.isActionable) {
+    // Update step cooldown
+    if (fighter._stepCooldown > 0) fighter._stepCooldown--;
+
+    // Start new step
+    if (!fighter._stepping && fighter._stepCooldown <= 0 && fighter.fsm.isActionable) {
+      if (this.input.isHeld(playerIndex, 'right')) {
+        fighter._stepping = true;
+        fighter._stepFrames = 0;
+        fighter._stepDirection = 1;
+        fighter.fsm.transition(FighterState.WALK_FORWARD);
+        isMoving = true;
+      } else if (this.input.isHeld(playerIndex, 'left')) {
+        fighter._stepping = true;
+        fighter._stepFrames = 0;
+        fighter._stepDirection = -1;
+        fighter.fsm.transition(FighterState.WALK_BACK);
+        isMoving = true;
+      }
+    }
+
+    if (!isMoving && !fighter._stepping && fighter._stepCooldown <= 0 && fighter.fsm.isActionable) {
       fighter.stopMoving();
     }
 

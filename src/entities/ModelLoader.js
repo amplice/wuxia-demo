@@ -415,93 +415,44 @@ export class ModelLoader {
     const gltf = await ModelLoader._loadGLB('/spearman_all.glb');
     const model = gltf.scene;
 
-    // Debug: inspect model structure
-    let meshCount = 0;
-    model.traverse((child) => {
-      if (child.isMesh) {
-        meshCount++;
-        console.log(`[Spearman] Mesh: ${child.name}, visible: ${child.visible}, material:`, child.material);
-      }
-      if (child.isBone) {
-        // Log first few bones
-        if (meshCount === 0) console.log(`[Spearman] Bone: ${child.name}`);
-      }
-    });
-    console.log(`[Spearman] Total meshes: ${meshCount}`);
-    const box = new THREE.Box3().setFromObject(model);
-    console.log(`[Spearman] Bounding box:`, box.min.toArray(), box.max.toArray());
-
     const clips = {};
-
-    const nameMap = {
-      'spear_idle':           'idle',
-      'spear_idle_alt':       'idle_alt',
-      'spear_attack_heavy':   'attack_quick',   // heavy anim is the quick/short attack
-      'spear_attack_thrust':  'attack_heavy',    // thrust anim is the heavy attack
-      'spear_walk_forward':   'walk_forward',
-      'spear_walk_backward':  'walk_backward',
-      'spear_strafe_left':    'strafe_left',
-      'spear_strafe_right':   'strafe_right',
-      'spear_walk_misc':      'walk_misc',
-    };
-
-    // Debug: log raw clip names from GLB
-    console.log('[Spearman] Raw clip names from GLB:', gltf.animations.map(c => c.name));
 
     for (const clip of gltf.animations) {
       // Strip armature prefix (Blender exports as "Armature|actionName")
-      const rawName = clip.name.includes('|') ? clip.name.split('|').pop() : clip.name;
-      const name = nameMap[rawName] || rawName;
+      let name = clip.name.includes('|') ? clip.name.split('|').pop() : clip.name;
+      // idle_alt available as fallback
+      // if (name === 'idle_alt') name = 'idle';
+      // else if (name === 'idle') name = 'idle_orig';
       clips[name] = clip;
-      console.log(`[Spearman] Clip '${clip.name}' → rawName '${rawName}' → mapped '${name}' (${clip.duration.toFixed(2)}s, ${clip.tracks.length} tracks)`);
-    }
-
-    // Debug: log track names from first clip to see bone naming convention
-    if (gltf.animations.length > 0) {
-      const sampleTracks = gltf.animations[0].tracks.slice(0, 5);
-      console.log('[Spearman] Sample track names:', sampleTracks.map(t => t.name));
     }
 
     console.log('Spearman animations loaded:', Object.keys(clips).map(k => `${k} (${clips[k].duration.toFixed(2)}s)`));
 
-    // Speed up walk/strafe animations (same method as dao attack speedup)
-    const WALK_SPEED_UP = 2;
-    for (const name of ['walk_forward', 'walk_backward']) {
-      const clip = clips[name];
+    // Lean animations slightly forward by rotating Hips X
+    const WALK_LEAN = 0.08; // radians (~4.5 degrees forward lean)
+    for (const clipName of ['walk_forward', 'walk_backward', 'idle', 'strafe_left', 'strafe_right']) {
+      const clip = clips[clipName];
       if (!clip) continue;
-      const origDuration = clip.duration;
       for (const track of clip.tracks) {
-        const newTimes = new Float32Array(track.times.length);
-        for (let i = 0; i < track.times.length; i++) {
-          newTimes[i] = track.times[i] / WALK_SPEED_UP;
+        const n = track.name.toLowerCase();
+        if (n.includes('hips') && n.endsWith('.quaternion')) {
+          const q = new THREE.Quaternion();
+          const lean = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), WALK_LEAN);
+          for (let i = 0; i < track.values.length; i += 4) {
+            q.set(track.values[i], track.values[i+1], track.values[i+2], track.values[i+3]);
+            q.premultiply(lean);
+            track.values[i] = q.x;
+            track.values[i+1] = q.y;
+            track.values[i+2] = q.z;
+            track.values[i+3] = q.w;
+          }
         }
-        track.times = newTimes;
       }
-      clip.duration = origDuration / WALK_SPEED_UP;
-      clip.resetDuration();
     }
 
-    // Strafe animations sped up 3x to match sidestep duration (~0.53s)
-    const STRAFE_SPEED_UP = 3;
-    for (const name of ['strafe_left', 'strafe_right']) {
-      const clip = clips[name];
-      if (!clip) continue;
-      const origDuration = clip.duration;
-      for (const track of clip.tracks) {
-        const newTimes = new Float32Array(track.times.length);
-        for (let i = 0; i < track.times.length; i++) {
-          newTimes[i] = track.times[i] / STRAFE_SPEED_UP;
-        }
-        track.times = newTimes;
-      }
-      clip.duration = origDuration / STRAFE_SPEED_UP;
-      clip.resetDuration();
-    }
-
-    // Fix Mixamo root bone: remove Hips position tracks (absolute values cause floating)
-    ModelLoader._fixMixamoRootBone(Object.values(clips));
-
-    // Pass rootRotationY so createFighterFromGLB can apply it to the clone
+    // Speed up walk animations 2x for gameplay feel
+    ModelLoader._speedUpClips(clips, ['walk_forward', 'walk_backward'], 2);
+    ModelLoader._speedUpClips(clips, ['strafe_left', 'strafe_right'], 2);
 
     // Pre-process: ensure skinned meshes are properly configured
     model.traverse((child) => {
@@ -510,7 +461,28 @@ export class ModelLoader {
       }
     });
 
-    return { model, clips, rootRotationY: Math.PI };
+    return { model, clips };
+  }
+
+  /**
+   * Speed up animation clips by compressing keyframe times.
+   * Creates new Float32Arrays (in-place modification causes jerky playback).
+   */
+  static _speedUpClips(clips, names, speedFactor) {
+    for (const name of names) {
+      const clip = clips[name];
+      if (!clip) continue;
+      const origDuration = clip.duration;
+      for (const track of clip.tracks) {
+        const newTimes = new Float32Array(track.times.length);
+        for (let i = 0; i < track.times.length; i++) {
+          newTimes[i] = track.times[i] / speedFactor;
+        }
+        track.times = newTimes;
+      }
+      clip.duration = origDuration / speedFactor;
+      clip.resetDuration();
+    }
   }
 
   /**
@@ -683,6 +655,7 @@ export class ModelLoader {
     // Scale to ~1.8 units tall
     const box = new THREE.Box3().setFromObject(clone);
     const height = box.getSize(new THREE.Vector3()).y;
+    console.log(`[createFighterFromGLB] raw height=${height.toFixed(3)}, box min=${box.min.y.toFixed(3)} max=${box.max.y.toFixed(3)}`);
     if (height > 0) clone.scale.setScalar(1.8 / height);
 
     // Re-center
@@ -729,30 +702,6 @@ export class ModelLoader {
     console.log('GLB fighter created, actions:', Object.keys(actions));
 
     return { root: clone, joints, mixer, actions };
-  }
-
-  /**
-   * Fix Mixamo root bone tracks in animation clips:
-   * Remove all Hips position tracks so the rest pose handles positioning.
-   * The animation mixer would otherwise override bone positions with absolute
-   * values from Mixamo, causing floating/displacement.
-   */
-  static _fixMixamoRootBone(clips) {
-    for (const clip of clips) {
-      const before = clip.tracks.length;
-      clip.tracks = clip.tracks.filter(track => {
-        const name = track.name.toLowerCase();
-        // Remove position tracks for Hips bone (any naming convention)
-        if (name.includes('hips') && name.endsWith('.position')) {
-          console.log(`[Spearman] Removing root position track: ${track.name}`);
-          return false;
-        }
-        return true;
-      });
-      if (clip.tracks.length < before) {
-        console.log(`[Spearman] ${clip.name}: removed ${before - clip.tracks.length} position tracks`);
-      }
-    }
   }
 
   /**

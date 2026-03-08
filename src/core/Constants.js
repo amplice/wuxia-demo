@@ -81,6 +81,9 @@ export const BLOCK_PUSHBACK_SPEED = 2.0;
 
 // Movement
 export const WALK_SPEED = 3.0;
+export const STEP_DISTANCE = 1.0;
+export const STEP_FRAMES = 34;
+export const STEP_COOLDOWN_FRAMES = 8;
 export const ARENA_RADIUS = 8.0;
 export const RING_OUT_RADIUS = 8.5;
 export const FIGHT_START_DISTANCE = 4.0;

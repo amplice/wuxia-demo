@@ -96,6 +96,12 @@ export class Fighter {
     this.walkPhase = 0;
     this._sidestepDir = 0;
 
+    // Discrete step state
+    this._stepping = false;
+    this._stepFrames = 0;
+    this._stepDirection = 0; // +1 = toward, -1 = away
+    this._stepCooldown = 0;
+
 
     // Ragdoll state
     this._ragdoll = null;
