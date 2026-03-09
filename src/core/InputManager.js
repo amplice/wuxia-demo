@@ -8,6 +8,7 @@ const P1_KEYS = {
   sidestepDown: 'KeyS',
   quick: 'KeyJ',
   heavy: 'KeyK',
+  thrust: 'KeyL',
   block: 'KeyU',
   backstep: 'Space',
 };
@@ -19,6 +20,7 @@ const P2_KEYS = {
   sidestepDown: 'ArrowDown',
   quick: 'Numpad1',
   heavy: 'Numpad2',
+  thrust: 'Numpad3',
   block: 'NumpadEnter',
   backstep: 'ShiftRight',
 };

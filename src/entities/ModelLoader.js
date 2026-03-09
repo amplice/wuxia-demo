@@ -314,7 +314,7 @@ export class ModelLoader {
    * Load spearman GLB with all animations.
    */
   static async loadSpearmanAnimations() {
-    const gltf = await ModelLoader._loadGLB('/spearman_all.glb');
+    const gltf = await ModelLoader._loadGLB('/spearman.glb');
     const model = gltf.scene;
 
     const clips = {};
@@ -322,6 +322,13 @@ export class ModelLoader {
     for (const clip of gltf.animations) {
       let name = clip.name.includes('|') ? clip.name.split('|').pop() : clip.name;
       clips[name] = clip;
+    }
+
+    // Swap idle_alt to be the main idle (looks better in game)
+    if (clips['idle_alt']) {
+      clips['idle_orig'] = clips['idle'];
+      clips['idle'] = clips['idle_alt'];
+      delete clips['idle_alt'];
     }
 
     // Lean animations slightly forward by rotating Hips X
@@ -348,6 +355,29 @@ export class ModelLoader {
 
     ModelLoader._speedUpClips(clips, ['walk_forward', 'walk_backward'], 2);
     ModelLoader._speedUpClips(clips, ['strafe_left', 'strafe_right'], 2);
+    ModelLoader._speedUpClips(clips, ['attack_quick', 'attack_heavy', 'attack_thrust'], 2);
+
+    // Zero out Hips root motion on attacks (keep character in place)
+    for (const clipName of ['attack_quick', 'attack_heavy', 'attack_thrust']) {
+      const clip = clips[clipName];
+      if (!clip) continue;
+      for (const track of clip.tracks) {
+        const n = track.name.toLowerCase();
+        if (n.includes('hips') && n.endsWith('.position')) {
+          const vpk = track.values.length / track.times.length;
+          if (vpk === 3 && track.times.length > 0) {
+            const x0 = track.values[0];
+            const y0 = track.values[1];
+            const z0 = track.values[2];
+            for (let i = 0; i < track.times.length; i++) {
+              track.values[i * 3] = x0;
+              track.values[i * 3 + 1] = y0;
+              track.values[i * 3 + 2] = z0;
+            }
+          }
+        }
+      }
+    }
 
     model.traverse((child) => {
       if (child.isSkinnedMesh) {
@@ -424,7 +454,7 @@ export class ModelLoader {
       }
     });
 
-    // Find hand bones for weapon attachment
+    // Find hand bones for weapon attachment, and SpearControl for baked spear
     const joints = {};
     clone.traverse((child) => {
       if (child.isBone) {
@@ -434,6 +464,9 @@ export class ModelLoader {
         }
         if (n === 'hand.l' || n === 'handl' || n === 'hand_l' || n === 'lefthand' || n === 'hand.l.001' || n === 'mixamorig:lefthand') {
           joints.handL = child;
+        }
+        if (n === 'speartip') {
+          joints.spearTip = child;
         }
       }
     });

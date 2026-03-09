@@ -81,6 +81,7 @@ export class AIController {
     if (inRange) {
       scores.quickAttack = 0.4 + p.aggression * 0.3 + noise();
       scores.heavyAttack = 0.15 + p.aggression * 0.2 + noise();
+      scores.thrustAttack = 0.2 + p.aggression * 0.2 + noise();
       if (closeRange) {
         scores.quickAttack += 0.2;
       }
@@ -172,6 +173,10 @@ export class AIController {
         break;
       case 'heavyAttack':
         fighter.attack(AttackType.HEAVY);
+        this.currentAction = null;
+        break;
+      case 'thrustAttack':
+        fighter.attack(AttackType.THRUST);
         this.currentAction = null;
         break;
       case 'block':

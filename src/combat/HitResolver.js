@@ -51,7 +51,10 @@ export class HitResolver {
   }
 
   checkSwordCollision(attacker, defender) {
-    const tip = attacker.weapon.getTipWorldPosition();
+    // Get weapon tip: prefer SpearTip bone (baked spear), else procedural weapon mesh
+    const tip = attacker.joints.spearTip
+      ? attacker.joints.spearTip.getWorldPosition(new THREE.Vector3())
+      : attacker.weapon.getTipWorldPosition();
 
     const handJoint = attacker.joints.handR || attacker.joints.handL;
     const base = new THREE.Vector3();

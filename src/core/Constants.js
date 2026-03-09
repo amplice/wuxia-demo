@@ -36,6 +36,7 @@ export const FighterState = {
 export const AttackType = {
   QUICK: 'quick',
   HEAVY: 'heavy',
+  THRUST: 'thrust',
 };
 
 // Hit results

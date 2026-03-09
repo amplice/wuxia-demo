@@ -494,8 +494,10 @@ export class Fighter {
       case FighterState.ATTACK_STARTUP:
       case FighterState.ATTACK_ACTIVE:
       case FighterState.ATTACK_RECOVERY: {
-        const isHeavy = this.fsm.currentAttackType === AttackType.HEAVY;
-        if (isHeavy) {
+        const atkType = this.fsm.currentAttackType;
+        if (atkType === AttackType.THRUST) {
+          clipName = pick('attack_thrust', 'attack');
+        } else if (atkType === AttackType.HEAVY) {
           clipName = pick('attack_heavy', 'attack');
         } else {
           clipName = pick('attack_quick', 'attack');
@@ -546,13 +548,27 @@ export class Fighter {
     }
 
     if (this.trail.active) {
-      const tip = this.weapon.getTipWorldPosition();
-      const base = new THREE.Vector3();
-      const handJoint = this.joints.handR || this.joints.handL;
-      if (handJoint) {
-        handJoint.getWorldPosition(base);
+      let tip, base;
+      if (this.joints.spearTip) {
+        // Baked spear: use SpearControl bone for tip, handR for base
+        tip = new THREE.Vector3();
+        this.joints.spearTip.getWorldPosition(tip);
+        base = new THREE.Vector3();
+        const handJoint = this.joints.handR || this.joints.handL;
+        if (handJoint) {
+          handJoint.getWorldPosition(base);
+        } else {
+          base.copy(this.position).setY(1.2);
+        }
       } else {
-        base.copy(this.position).setY(1.2);
+        tip = this.weapon.getTipWorldPosition();
+        base = new THREE.Vector3();
+        const handJoint = this.joints.handR || this.joints.handL;
+        if (handJoint) {
+          handJoint.getWorldPosition(base);
+        } else {
+          base.copy(this.position).setY(1.2);
+        }
       }
       this.trail.update(tip, base);
     }
@@ -599,16 +615,20 @@ export class Fighter {
   attack(type) {
     const result = this.fsm.startAttack(type);
     if (result && this.useClips) {
-      const isHeavy = type === AttackType.HEAVY;
-      // Find the right clip: prefer separate quick/heavy, fall back to single 'attack'
-      const clipName = isHeavy
-        ? (this.clipActions.attack_heavy ? 'attack_heavy' : 'attack')
-        : (this.clipActions.attack_quick ? 'attack_quick' : 'attack');
+      // Find the right clip for the attack type
+      let clipName;
+      if (type === AttackType.THRUST) {
+        clipName = this.clipActions.attack_thrust ? 'attack_thrust' : 'attack';
+      } else if (type === AttackType.HEAVY) {
+        clipName = this.clipActions.attack_heavy ? 'attack_heavy' : 'attack';
+      } else {
+        clipName = this.clipActions.attack_quick ? 'attack_quick' : 'attack';
+      }
       const action = this.clipActions[clipName];
       if (action) {
         // Only adjust timeScale if using a single shared attack clip
-        const hasSeparateClips = this.clipActions.attack_quick || this.clipActions.attack_heavy;
-        const timeScale = (!hasSeparateClips && isHeavy) ? 0.5 : 1.0;
+        const hasSeparateClips = this.clipActions.attack_quick || this.clipActions.attack_heavy || this.clipActions.attack_thrust;
+        const timeScale = (!hasSeparateClips && type === AttackType.HEAVY) ? 0.5 : 1.0;
         action.timeScale = timeScale;
         const clipDuration = action.getClip().duration / timeScale;
         const fsmFrames = Math.ceil(clipDuration * 60);

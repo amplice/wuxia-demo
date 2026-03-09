@@ -460,6 +460,8 @@ export class Game {
       fighter.attack(AttackType.QUICK);
     } else if (this.input.consumeBuffer(playerIndex, 'heavy', frame)) {
       fighter.attack(AttackType.HEAVY);
+    } else if (this.input.consumeBuffer(playerIndex, 'thrust', frame)) {
+      fighter.attack(AttackType.THRUST);
     }
 
     // Block (hold) / Parry (tap)
