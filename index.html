@@ -416,6 +416,53 @@
       pointer-events: none;
       transition: opacity 0.05s;
     }
+
+    /* Kill cam vignette */
+    #kill-vignette {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.6s ease-in;
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%);
+    }
+    #kill-vignette.active { opacity: 1; }
+
+    /* Kill cam speed lines */
+    #kill-lines {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.08s;
+      overflow: hidden;
+    }
+    #kill-lines.active { opacity: 1; }
+    #kill-lines .line {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.12);
+      transform-origin: center center;
+    }
+
+    /* Kill text */
+    #kill-text {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(1.5);
+      font-size: 56px;
+      color: #c8a84e;
+      letter-spacing: 16px;
+      text-shadow: 0 0 40px rgba(200, 168, 78, 0.8), 0 0 80px rgba(180, 40, 40, 0.4);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+    }
+    #kill-text.active {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
   </style>
 </head>
 <body>
@@ -425,8 +472,7 @@
       <h1>WUXIA WARRIOR</h1>
       <div class="subtitle">THE WAY OF THE SWORD</div>
       <div class="prompt">PRESS ENTER TO BEGIN</div>
-      <button class="select-btn" id="anim-player-btn" style="margin-top: 30px; font-size: 14px; padding: 10px 30px; opacity: 0.7;">ANIMATION PLAYER</button>
-      <button class="select-btn" id="pose-browser-btn" style="margin-top: 10px; font-size: 14px; padding: 10px 30px; opacity: 0.7;">POSE BROWSER</button>
+      <!-- <button class="select-btn" id="anim-player-btn" style="margin-top: 30px; font-size: 14px; padding: 10px 30px; opacity: 0.7;">ANIMATION PLAYER</button> -->
     </div>
 
     <!-- Select Screen -->
@@ -450,21 +496,6 @@
         </div>
       </div>
 
-      <div class="select-section">
-        <h3>P1 Character</h3>
-        <div class="select-options" id="p1-char-options">
-          <button class="select-btn active" data-char="dao">DAO SWORDSMAN</button>
-          <button class="select-btn" data-char="spear">SPEARMAN</button>
-        </div>
-      </div>
-
-      <div class="select-section" id="p2-char-section">
-        <h3>P2 Character</h3>
-        <div class="select-options" id="p2-char-options">
-          <button class="select-btn" data-char="dao">DAO SWORDSMAN</button>
-          <button class="select-btn active" data-char="spear">SPEARMAN</button>
-        </div>
-      </div>
 
       <button class="select-btn" id="start-fight-btn" style="margin-top: 20px; font-size: 22px; padding: 18px 60px;">FIGHT</button>
     </div>
@@ -580,6 +611,11 @@
 
     <!-- Screen Flash -->
     <div id="screen-flash"></div>
+
+    <!-- Kill Cam Overlays -->
+    <div id="kill-vignette"></div>
+    <div id="kill-lines"></div>
+    <div id="kill-text">FATAL</div>
   </div>
 
   <script type="module" src="/src/main.js"></script>

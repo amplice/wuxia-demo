@@ -164,17 +164,24 @@ export class Fighter {
 
     // Attack lunge — move toward opponent during active frames
     if (this.state === FighterState.ATTACK_ACTIVE && this.currentAttackData) {
-      const lungeSpeed = this.currentAttackData.lunge / this.currentAttackData.active * 60;
-      const angle = this.group.rotation.y;
-      this.position.x += Math.sin(angle) * lungeSpeed * dt;
-      this.position.z += Math.cos(angle) * lungeSpeed * dt;
+      const atk = this.currentAttackData;
+      const startFrac = atk.lungeStart ?? 0;
+      const endFrac = atk.lungeEnd ?? (atk.lungeRatio || 1.0);
+      const startFrame = atk.active * startFrac;
+      const endFrame = atk.active * endFrac;
+      const lungeFrames = endFrame - startFrame;
+      if (lungeFrames > 0 && this.stateFrames >= startFrame && this.stateFrames < endFrame) {
+        const lungeSpeed = atk.lunge / lungeFrames * 60;
+        const angle = this.group.rotation.y;
+        this.position.x += Math.sin(angle) * lungeSpeed * dt;
+        this.position.z += Math.cos(angle) * lungeSpeed * dt;
+      }
     }
 
     // Sidestep movement — perpendicular to facing direction
     if (this.state === FighterState.SIDESTEP && this.fsm.sidestepPhase === 'dash') {
       const speed = SIDESTEP_DASH_DISTANCE / SIDESTEP_DASH_FRAMES * 60;
       const angle = this.group.rotation.y;
-      // Perpendicular to facing: rotate 90 degrees
       const perpX = -Math.cos(angle) * this.fsm.sidestepDirection;
       const perpZ = Math.sin(angle) * this.fsm.sidestepDirection;
       this.position.x += perpX * speed * dt;
@@ -448,6 +455,7 @@ export class Fighter {
     const sy = bs * (1 + (squash - 1));
     r.scale.y += (sy - r.scale.y) * t;
   }
+
 
   _updateClipAnimation() {
     const state = this.state;

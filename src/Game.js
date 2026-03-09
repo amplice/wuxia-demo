@@ -13,7 +13,7 @@ import { ParticleSystem } from './vfx/ParticleSystem.js';
 import { ScreenEffects } from './vfx/ScreenEffects.js';
 import { AIController } from './ai/AIController.js';
 import { UIManager } from './ui/UIManager.js';
-import { PoseBrowser } from './ui/PoseBrowser.js';
+// import { PoseBrowser } from './ui/PoseBrowser.js';
 import {
   GameState, FighterState, AttackType, HitResult, WeaponType,
   FIGHT_START_DISTANCE, ROUNDS_TO_WIN, ROUND_INTRO_DURATION,
@@ -41,7 +41,6 @@ export class Game {
     this.fighter2 = null;
     this.aiController = null;
     this.modelData = null;
-    this.fightAnimData = null;
     this.spearmanAnimData = null;
 
     this.gameState = GameState.TITLE;
@@ -81,14 +80,6 @@ export class Game {
     this.environment = new Environment(this.scene);
     this.particles = new ParticleSystem(this.scene);
 
-    // Preload fight animation GLBs
-    try {
-      this.fightAnimData = await ModelLoader.loadFightAnimations();
-    } catch (err) {
-      console.warn('Failed to load fight animations, falling back:', err);
-      this.fightAnimData = null;
-    }
-
     // Preload spearman animations
     try {
       this.spearmanAnimData = await ModelLoader.loadSpearmanAnimations();
@@ -97,14 +88,6 @@ export class Game {
       this.spearmanAnimData = null;
     }
 
-    if (!this.fightAnimData) {
-      try {
-        this.modelData = await ModelLoader.load();
-      } catch (err) {
-        console.warn('Failed to load FBX model, using procedural fighters:', err);
-        this.modelData = null;
-      }
-    }
 
     // UI
     this.ui.showTitle();
@@ -126,13 +109,9 @@ export class Game {
       this.ui.showTitle();
     };
 
-    this.ui.title.onAnimPlayer = () => {
-      this._startAnimPlayer();
-    };
-
-    this.ui.title.onPoseBrowser = () => {
-      this._startPoseBrowser();
-    };
+    // this.ui.title.onAnimPlayer = () => {
+    //   this._startAnimPlayer();
+    // };
 
     this.ui.animPlayer.onBack = () => {
       this._stopAnimPlayer();
@@ -152,10 +131,7 @@ export class Game {
   }
 
   _getCharData(charType) {
-    if (charType === 'spear' && this.spearmanAnimData) {
-      return { animData: this.spearmanAnimData, weapon: WeaponType.SPEAR };
-    }
-    return { animData: this.fightAnimData, weapon: WeaponType.DAO };
+    return { animData: this.spearmanAnimData, weapon: WeaponType.SPEAR };
   }
 
   _startMatch(p1Char, p2Char) {
@@ -215,6 +191,7 @@ export class Game {
     this.stateTimer = 0;
     this.clock.setTimeScale(1.0);
     this.killSlowMoTimer = 0;
+    this._killRealStart = null;
 
     this.fighter1.resetForRound(-FIGHT_START_DISTANCE / 2);
     this.fighter2.resetForRound(FIGHT_START_DISTANCE / 2);
@@ -284,25 +261,38 @@ export class Game {
       return;
     }
 
-    if (this.gameState === GameState.POSE_BROWSER) {
-      if (this._poseBrowserMixer) {
-        this._poseBrowserMixer.update(dt);
-      }
-      this.camera.position.set(2, 2, 3);
-      this.camera.lookAt(0, 0.9, 0);
-      this.environment.update(dt);
-      return;
-    }
 
     if (this.fighter1 && this.fighter2) {
       this.cameraController.update(dt, this.fighter1, this.fighter2);
     }
 
     if (this.gameState === GameState.KILL_CAM) {
-      this.killSlowMoTimer += dt;
-      if (this.killSlowMoTimer >= KILL_SLOWMO_DURATION) {
+      // Use real time for kill cam phases (not affected by time scale)
+      const now = performance.now() / 1000;
+      if (!this._killRealStart) this._killRealStart = now;
+      const elapsed = now - this._killRealStart;
+
+      // Phased slowmo: freeze → ultra slow → slow → end
+      const FREEZE_END = 0.15;
+      const ULTRA_SLOW_END = 1.0;
+      const SLOW_END = 3.0;
+
+      if (elapsed < FREEZE_END) {
+        this.clock.setTimeScale(0.0);
+      } else if (elapsed < ULTRA_SLOW_END) {
+        // Ease from 0 to 0.1
+        const t = (elapsed - FREEZE_END) / (ULTRA_SLOW_END - FREEZE_END);
+        this.clock.setTimeScale(t * 0.1);
+      } else if (elapsed < SLOW_END) {
+        // Ease from 0.1 to 0.4
+        const t = (elapsed - ULTRA_SLOW_END) / (SLOW_END - ULTRA_SLOW_END);
+        this.clock.setTimeScale(0.1 + t * 0.3);
+      } else {
+        // Kill cam done
         this.clock.setTimeScale(1.0);
         this.cameraController.stopKillCam();
+        this.screenEffects.stopKillEffects();
+        this._killRealStart = null;
 
         if (this.fighter2 && this.fighter2.damageSystem.isDead()) {
           this.p1Score++;
@@ -571,12 +561,14 @@ export class Game {
     pos.y += 1.0;
     this.particles.emitBloodGush(pos, 50);
 
-    this.clock.setTimeScale(KILL_SLOWMO_SCALE);
+    // Phase 1: Impact freeze — complete time stop
+    this.clock.setTimeScale(0.0);
     this.killSlowMoTimer = 0;
+    this.killPhase = 'freeze';
 
-    this.cameraController.startKillCam(victim.position);
-    this.cameraController.shake(0.5);
-    this.screenEffects.flashRed();
+    this.cameraController.startKillCam(victim, killer);
+    this.cameraController.shake(0.6);
+    this.screenEffects.startKillEffects();
 
     this.gameState = GameState.KILL_CAM;
   }
@@ -624,7 +616,10 @@ export class Game {
   }
 
   _enforceFighterSeparation(a, b) {
-    const MIN_DIST = 0.8;
+    // Spear/staff fighters need more space to avoid weapons clipping through bodies
+    const hasLongWeapon = a.weaponType === WeaponType.SPEAR || a.weaponType === WeaponType.STAFF ||
+                          b.weaponType === WeaponType.SPEAR || b.weaponType === WeaponType.STAFF;
+    const MIN_DIST = hasLongWeapon ? 1.6 : 0.8;
     const dx = b.position.x - a.position.x;
     const dz = b.position.z - a.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
@@ -868,63 +863,6 @@ export class Game {
     }
   }
 
-  // ── Pose Browser Mode ──────────────────────────────
-
-  async _startPoseBrowser() {
-    this._cleanupFighters();
-    this.gameState = GameState.POSE_BROWSER;
-
-    // Load the GLB model (reuse cached fightAnimData if available)
-    let modelData = this.fightAnimData;
-    if (!modelData) {
-      modelData = await ModelLoader.loadFightAnimations();
-    }
-
-    // Create a clone of the model for browsing
-    const result = ModelLoader.createFighterFromGLB(
-      modelData.model, modelData.clips, null, modelData.texture
-    );
-    this._poseBrowserRoot = result.root;
-    this._poseBrowserMixer = result.mixer;
-
-    // Attach weapon
-    if (result.joints.handR) {
-      const wpn = new Weapon(WeaponType.DAO);
-      const s = 1 / result.root.scale.x;
-      wpn.mesh.scale.setScalar(s);
-      result.joints.handR.add(wpn.mesh);
-    }
-
-    this.scene.add(this._poseBrowserRoot);
-
-    // Set up animation browser UI
-    this._poseBrowser = new PoseBrowser();
-    this._poseBrowser.onBack = () => {
-      this._stopPoseBrowser();
-      this.gameState = GameState.TITLE;
-      this.ui.showTitle();
-    };
-    await this._poseBrowser.loadData(this._poseBrowserMixer, this._poseBrowserRoot);
-    this._poseBrowser.show();
-
-    this.ui.hideAll();
-    this.cameraController.stopKillCam();
-  }
-
-  _stopPoseBrowser() {
-    if (this._poseBrowserRoot) {
-      this.scene.remove(this._poseBrowserRoot);
-      this._poseBrowserRoot = null;
-    }
-    if (this._poseBrowserMixer) {
-      this._poseBrowserMixer.stopAllAction();
-      this._poseBrowserMixer = null;
-    }
-    if (this._poseBrowser) {
-      this._poseBrowser.hide();
-      this._poseBrowser = null;
-    }
-  }
 
   _updateAnimPlayerTestMode(dt) {
     if (!this.animPlayerModel) return;

@@ -2,16 +2,7 @@ export class TitleScreen {
   constructor() {
     this.el = document.getElementById('title-screen');
     this.onStart = null;
-    this.onAnimPlayer = null;
-    this.onPoseBrowser = null;
     this._keyHandler = this._onKey.bind(this);
-
-    document.getElementById('anim-player-btn').addEventListener('click', () => {
-      if (this.onAnimPlayer) this.onAnimPlayer();
-    });
-    document.getElementById('pose-browser-btn').addEventListener('click', () => {
-      if (this.onPoseBrowser) this.onPoseBrowser();
-    });
   }
 
   show() {

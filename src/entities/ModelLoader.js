@@ -357,7 +357,8 @@ export class ModelLoader {
     ModelLoader._speedUpClips(clips, ['strafe_left', 'strafe_right'], 2);
     ModelLoader._speedUpClips(clips, ['attack_quick', 'attack_heavy', 'attack_thrust'], 2);
 
-    // Zero out Hips root motion on attacks (keep character in place)
+    // Zero out Hips horizontal root motion on attacks (keep character in place)
+    // Keep Y (vertical bob) so feet stay planted during steps
     for (const clipName of ['attack_quick', 'attack_heavy', 'attack_thrust']) {
       const clip = clips[clipName];
       if (!clip) continue;
@@ -367,11 +368,10 @@ export class ModelLoader {
           const vpk = track.values.length / track.times.length;
           if (vpk === 3 && track.times.length > 0) {
             const x0 = track.values[0];
-            const y0 = track.values[1];
             const z0 = track.values[2];
             for (let i = 0; i < track.times.length; i++) {
               track.values[i * 3] = x0;
-              track.values[i * 3 + 1] = y0;
+              // Y (i*3+1) kept — vertical bob plants feet
               track.values[i * 3 + 2] = z0;
             }
           }

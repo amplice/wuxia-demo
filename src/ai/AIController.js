@@ -74,8 +74,10 @@ export class AIController {
 
     const scores = {};
 
-    const inRange = dist < 2.5;
-    const closeRange = dist < 1.8;
+    // Spear/staff fighters engage at longer range
+    const hasLongWeapon = fighter.weaponType === 'spear' || fighter.weaponType === 'staff';
+    const inRange = dist < (hasLongWeapon ? 3.5 : 2.5);
+    const closeRange = dist < (hasLongWeapon ? 2.5 : 1.8);
 
     // Attack scoring
     if (inRange) {
@@ -104,7 +106,7 @@ export class AIController {
     if (opponentAttacking) {
       scores.sidestep = (scores.sidestep || 0) + 0.4 + noise();
     }
-    scores.sidestep = (scores.sidestep || 0) + 0.15 + noise();
+    scores.sidestep = (scores.sidestep || 0) + 0.05 + noise();
 
     // Movement — prefer staying at fighting distance, not retreating
     if (!inRange) {
@@ -212,8 +214,11 @@ export class AIController {
 
   _aiMoveToward(fighter, dt) {
     if (!fighter.fsm.isActionable) return;
-    const dir = this._opponent.position.x > fighter.position.x ? 1 : -1;
-    fighter.position.x += dir * WALK_SPEED * dt;
+    const dx = this._opponent.position.x - fighter.position.x;
+    const dz = this._opponent.position.z - fighter.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz) || 0.01;
+    fighter.position.x += (dx / dist) * WALK_SPEED * dt;
+    fighter.position.z += (dz / dist) * WALK_SPEED * dt;
     if (fighter.fsm.state === FighterState.IDLE || fighter.fsm.state === FighterState.PARRY_SUCCESS) {
       fighter.fsm.transition(FighterState.WALK_FORWARD);
     }
@@ -221,8 +226,11 @@ export class AIController {
 
   _aiMoveAway(fighter, dt) {
     if (!fighter.fsm.isActionable) return;
-    const dir = this._opponent.position.x > fighter.position.x ? -1 : 1;
-    fighter.position.x += dir * WALK_SPEED * dt;
+    const dx = this._opponent.position.x - fighter.position.x;
+    const dz = this._opponent.position.z - fighter.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz) || 0.01;
+    fighter.position.x -= (dx / dist) * WALK_SPEED * dt;
+    fighter.position.z -= (dz / dist) * WALK_SPEED * dt;
     if (fighter.fsm.state === FighterState.IDLE || fighter.fsm.state === FighterState.PARRY_SUCCESS) {
       fighter.fsm.transition(FighterState.WALK_BACK);
     }

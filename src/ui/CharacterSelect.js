@@ -5,7 +5,7 @@ export class CharacterSelect {
 
     this.mode = 'ai';
     this.difficulty = 'medium';
-    this.p1Char = 'dao';
+    this.p1Char = 'spear';
     this.p2Char = 'spear';
 
     this._setupButtons();
@@ -29,24 +29,6 @@ export class CharacterSelect {
         document.querySelectorAll('#difficulty-options .select-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.difficulty = btn.dataset.diff;
-      });
-    });
-
-    // P1 character buttons
-    document.querySelectorAll('#p1-char-options .select-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#p1-char-options .select-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.p1Char = btn.dataset.char;
-      });
-    });
-
-    // P2 character buttons
-    document.querySelectorAll('#p2-char-options .select-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#p2-char-options .select-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.p2Char = btn.dataset.char;
       });
     });
 

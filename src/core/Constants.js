@@ -85,7 +85,7 @@ export const STEP_DISTANCE = 1.0;
 export const STEP_FRAMES = 34;
 export const STEP_COOLDOWN_FRAMES = 8;
 export const ARENA_RADIUS = 8.0;
-export const FIGHT_START_DISTANCE = 4.0;
+export const FIGHT_START_DISTANCE = 5.0;
 
 // Kill cam
 export const KILL_SLOWMO_SCALE = 0.3;
