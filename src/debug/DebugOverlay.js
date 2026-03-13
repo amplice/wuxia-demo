@@ -106,7 +106,7 @@ export class DebugOverlay {
     lines.push(`  actionable=${fighter.actionable} attacking=${fighter.attacking} sidestepPhase=${fighter.sidestepPhase ?? '-'} dead=${fighter.dead}`);
     lines.push(`  tipSpeed=${fighter.tipSpeed.toFixed(4)} baseSpeed=${fighter.baseSpeed.toFixed(4)} relTarget=${fighter.tipRelativeToward.toFixed(4)} relForward=${fighter.tipRelativeForward.toFixed(4)}`);
     if (fighter.collision) {
-      lines.push(`  collision dist=${fighter.collision.distance.toFixed(4)} hitRadius=${fighter.collision.hitRadius.toFixed(3)} defender=${fighter.collision.defenderState ?? '-'}`);
+      lines.push(`  collision dist=${fighter.collision.distance.toFixed(4)} hurtRadius=${fighter.collision.hurtRadius.toFixed(3)} hurtHeight=${fighter.collision.hurtHeight.toFixed(3)} defender=${fighter.collision.defenderState ?? '-'}`);
       lines.push(`  collision motionGate=${fighter.collision.motionGatePassed} forward=${fighter.collision.forwardDrive.toFixed(4)} toward=${fighter.collision.towardTarget.toFixed(4)} segmentHit=${fighter.collision.segmentHit}`);
       lines.push(`  collision resolve=${fighter.collision.lastResolve ?? '-'} result=${fighter.collision.lastCheckResult ?? '-'}`);
     }
@@ -141,7 +141,7 @@ export class DebugOverlay {
     const group = new THREE.Group();
 
     const hurt = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 16, 12),
+      new THREE.CylinderGeometry(1, 1, 1, 20, 1, true),
       new THREE.MeshBasicMaterial({
         color: hurtColor,
         transparent: true,
@@ -223,7 +223,7 @@ export class DebugOverlay {
       fighter.hurtCenter.y,
       fighter.hurtCenter.z,
     );
-    helper.hurt.scale.setScalar(fighter.hurtRadius);
+    helper.hurt.scale.set(fighter.hurtRadius, fighter.hurtHeight, fighter.hurtRadius);
 
     helper.body.position.set(
       fighter.bodyCollision.x,

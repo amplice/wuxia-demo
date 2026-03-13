@@ -51,7 +51,6 @@ export const HitResult = {
 // Weapon types
 export const WeaponType = {
   KATANA: 'katana',
-  STAFF: 'staff',
   SPEAR: 'spear',
 };
 

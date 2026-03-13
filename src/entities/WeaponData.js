@@ -9,14 +9,6 @@ export const WEAPON_STATS = {
     color: 0xddccaa,
     guardSize: 0.1,
   },
-  [WeaponType.STAFF]: {
-    name: 'Staff',
-    description: 'Long reach, slower strikes',
-    length: 1.6,
-    width: 0.025,
-    color: 0x886644,
-    guardSize: 0,
-  },
   [WeaponType.SPEAR]: {
     name: 'Spear',
     description: 'Long thrusting weapon',

@@ -5,7 +5,8 @@ import {
   WeaponType,
 } from '../core/Constants.js';
 
-const HIT_RADIUS = 0.5;
+const HURT_RADIUS = 0.5;
+const HURT_HEIGHT = 1.8;
 const TIP_TOWARD_TARGET_THRESHOLD = 0.001;
 const TIP_RELATIVE_SPEED_THRESHOLD = 0.002;
 
@@ -13,6 +14,7 @@ const _defenderCenter = new THREE.Vector3();
 const _lineDir = new THREE.Vector3();
 const _toPoint = new THREE.Vector3();
 const _closest = new THREE.Vector3();
+const _candidatePoint = new THREE.Vector3();
 
 export class HitResolver {
   resolve(attacker, defender) {
@@ -72,7 +74,8 @@ export class HitResolver {
 
     const collision = attacker._debugCollision || (attacker._debugCollision = {});
     collision.distance = Infinity;
-    collision.hitRadius = HIT_RADIUS;
+    collision.hurtRadius = HURT_RADIUS;
+    collision.hurtHeight = HURT_HEIGHT;
     collision.forwardDrive = 0;
     collision.towardTarget = 0;
     collision.motionGatePassed = false;
@@ -95,11 +98,68 @@ export class HitResolver {
       return false;
     }
 
-    const dist = this._distToLineSegment(_defenderCenter, base, tip);
+    const dist = this._distToVerticalCylinder(base, tip, _defenderCenter, HURT_RADIUS, HURT_HEIGHT);
     collision.distance = dist;
-    collision.segmentHit = dist < HIT_RADIUS;
-    collision.lastCheckResult = collision.segmentHit ? 'segment_hit' : 'out_of_range';
+    collision.segmentHit = dist <= 0;
+    collision.lastCheckResult = collision.segmentHit ? 'cylinder_hit' : 'out_of_range';
     return collision.segmentHit;
+  }
+
+  _distToVerticalCylinder(lineStart, lineEnd, center, radius, height) {
+    const yMin = center.y - (height * 0.5);
+    const yMax = center.y + (height * 0.5);
+
+    // Check the endpoints directly first.
+    const startDist = this._pointToCylinderDistance(lineStart, center, radius, yMin, yMax);
+    if (startDist <= 0) return 0;
+    const endDist = this._pointToCylinderDistance(lineEnd, center, radius, yMin, yMax);
+    if (endDist <= 0) return 0;
+
+    const dx = lineEnd.x - lineStart.x;
+    const dz = lineEnd.z - lineStart.z;
+    const lenSqXZ = dx * dx + dz * dz;
+
+    let bestDist = Math.min(startDist, endDist);
+
+    // Closest horizontal approach to the cylinder axis.
+    if (lenSqXZ > 1e-8) {
+      const tClosest = THREE.MathUtils.clamp(
+        ((center.x - lineStart.x) * dx + (center.z - lineStart.z) * dz) / lenSqXZ,
+        0,
+        1,
+      );
+      _candidatePoint.lerpVectors(lineStart, lineEnd, tClosest);
+      bestDist = Math.min(bestDist, this._pointToCylinderDistance(_candidatePoint, center, radius, yMin, yMax));
+      if (bestDist <= 0) return 0;
+    }
+
+    // Check where the segment crosses the top/bottom planes of the cylinder caps.
+    const dy = lineEnd.y - lineStart.y;
+    if (Math.abs(dy) > 1e-8) {
+      for (const planeY of [yMin, yMax]) {
+        const tPlane = (planeY - lineStart.y) / dy;
+        if (tPlane >= 0 && tPlane <= 1) {
+          _candidatePoint.lerpVectors(lineStart, lineEnd, tPlane);
+          bestDist = Math.min(bestDist, this._pointToCylinderDistance(_candidatePoint, center, radius, yMin, yMax));
+          if (bestDist <= 0) return 0;
+        }
+      }
+    }
+
+    return bestDist;
+  }
+
+  _pointToCylinderDistance(point, center, radius, yMin, yMax) {
+    const dx = point.x - center.x;
+    const dz = point.z - center.z;
+    const horizontalDist = Math.sqrt(dx * dx + dz * dz);
+    const radialOutside = Math.max(0, horizontalDist - radius);
+    const verticalOutside = point.y < yMin ? (yMin - point.y) : (point.y > yMax ? (point.y - yMax) : 0);
+
+    if (radialOutside === 0 && verticalOutside === 0) {
+      return 0;
+    }
+    return Math.hypot(radialOutside, verticalOutside);
   }
 
   _distToLineSegment(point, lineStart, lineEnd) {

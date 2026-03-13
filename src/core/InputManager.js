@@ -14,14 +14,14 @@ const P1_KEYS = {
 };
 
 const P2_KEYS = {
-  right: 'ArrowRight',
-  left: 'ArrowLeft',
-  sidestepUp: 'ArrowUp',
-  sidestepDown: 'ArrowDown',
-  quick: 'Numpad1',
-  heavy: 'Numpad2',
-  thrust: 'Numpad3',
-  block: 'NumpadEnter',
+  right: 'ArrowLeft',
+  left: 'ArrowRight',
+  sidestepUp: 'ArrowDown',
+  sidestepDown: 'ArrowUp',
+  quick: 'BracketLeft',
+  heavy: 'BracketRight',
+  thrust: 'Backslash',
+  block: 'Equal',
   backstep: 'ShiftRight',
 };
 

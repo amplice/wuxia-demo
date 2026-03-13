@@ -25,17 +25,6 @@ export class Weapon {
       });
       this.bladeMesh = new THREE.Mesh(geo, mat);
       this.group.add(this.bladeMesh);
-    } else if (this.type === WeaponType.STAFF) {
-      // Staff - long cylinder
-      const geo = new THREE.CylinderGeometry(s.width, s.width * 0.8, s.length, 6);
-      geo.translate(0, s.length / 2, 0);
-      const mat = new THREE.MeshStandardMaterial({
-        color: s.color,
-        roughness: 0.7,
-        metalness: 0.1,
-      });
-      this.bladeMesh = new THREE.Mesh(geo, mat);
-      this.group.add(this.bladeMesh);
     } else {
       // Sword - handle + guard + blade
       // Handle

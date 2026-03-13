@@ -172,7 +172,8 @@ export class Fighter {
 
     // Sidestep movement — perpendicular to facing direction
     if (this.state === FighterState.SIDESTEP && this.fsm.sidestepPhase === 'dash') {
-      const speed = SIDESTEP_DASH_DISTANCE / SIDESTEP_DASH_FRAMES * 60;
+      const sidestepDistance = this.charDef.sidestepDistance ?? SIDESTEP_DASH_DISTANCE;
+      const speed = sidestepDistance / SIDESTEP_DASH_FRAMES * 60;
       const angle = this.group.rotation.y;
       const perpX = -Math.cos(angle) * this.fsm.sidestepDirection;
       const perpZ = Math.sin(angle) * this.fsm.sidestepDirection;
@@ -614,7 +615,8 @@ export class Fighter {
         y: hurtCenter.y,
         z: hurtCenter.z,
       },
-      hurtRadius: this._debugCollision?.hitRadius ?? 0.5,
+      hurtRadius: this._debugCollision?.hurtRadius ?? 0.5,
+      hurtHeight: this._debugCollision?.hurtHeight ?? 1.8,
       bodyRadius,
       collision: this._debugCollision ? { ...this._debugCollision } : null,
     };

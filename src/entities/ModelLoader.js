@@ -92,6 +92,15 @@ export class ModelLoader {
       }
     }
 
+    // Apply per-clip overrides after group speed-ups.
+    if (charDef.clipSpeedOverrides) {
+      for (const [clipName, factor] of Object.entries(charDef.clipSpeedOverrides)) {
+        if (factor && factor !== 1) {
+          ModelLoader._speedUpClips(clips, [clipName], factor);
+        }
+      }
+    }
+
     // Zero out Hips horizontal root motion on attack clips (keep Y for vertical bob)
     const attackClips = charDef.clipSpeedups?.attack || [];
     for (const clipName of attackClips) {
