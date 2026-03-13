@@ -8,16 +8,15 @@ const BASE_DATA = {
 
 // Weapon modifiers
 const WEAPON_MODS = {
-  [WeaponType.JIAN]: { startupMod: 0, reachMod: 0, recoveryMod: 0, lungeMult: 1 },
-  [WeaponType.DAO]: { startupMod: 1, reachMod: 0.1, recoveryMod: -1, lungeMult: 1 },
+  [WeaponType.KATANA]: { startupMod: 0, reachMod: 0, recoveryMod: 0, lungeMult: 1 },
   [WeaponType.STAFF]: { startupMod: 2, reachMod: 0.4, recoveryMod: 2, lungeMult: 1 },
   [WeaponType.SPEAR]: { startupMod: 1, reachMod: 0.5, recoveryMod: 1, lungeMult: 0.4 },
 };
 
-export function getAttackData(attackType, weaponType = WeaponType.JIAN) {
+export function getAttackData(attackType, weaponType = WeaponType.KATANA) {
   const base = BASE_DATA[attackType];
   if (!base) return BASE_DATA[AttackType.QUICK]; // fallback
-  const mod = WEAPON_MODS[weaponType];
+  const mod = WEAPON_MODS[weaponType] || WEAPON_MODS[WeaponType.KATANA];
 
   return {
     startup: base.startup + mod.startupMod,

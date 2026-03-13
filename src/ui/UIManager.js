@@ -2,7 +2,6 @@ import { TitleScreen } from './TitleScreen.js';
 import { CharacterSelect } from './CharacterSelect.js';
 import { HUD } from './HUD.js';
 import { VictoryScreen } from './VictoryScreen.js';
-import { AnimPlayerScreen } from './AnimPlayerScreen.js';
 
 export class UIManager {
   constructor() {
@@ -10,7 +9,21 @@ export class UIManager {
     this.select = new CharacterSelect();
     this.hud = new HUD();
     this.victory = new VictoryScreen();
-    this.animPlayer = new AnimPlayerScreen();
+    this.animPlayer = null;
+    this._animPlayerPromise = null;
+  }
+
+  async ensureAnimPlayer() {
+    if (this.animPlayer) return this.animPlayer;
+
+    if (!this._animPlayerPromise) {
+      this._animPlayerPromise = import('./AnimPlayerScreen.js').then(({ AnimPlayerScreen }) => {
+        this.animPlayer = new AnimPlayerScreen();
+        return this.animPlayer;
+      });
+    }
+
+    return this._animPlayerPromise;
   }
 
   hideAll() {
@@ -18,7 +31,9 @@ export class UIManager {
     this.select.hide();
     this.hud.hide();
     this.victory.hide();
-    this.animPlayer.hide();
+    if (this.animPlayer) {
+      this.animPlayer.hide();
+    }
   }
 
   showTitle() {
@@ -41,8 +56,10 @@ export class UIManager {
     this.victory.show(winner, p1Score, p2Score);
   }
 
-  showAnimPlayer() {
+  async showAnimPlayer() {
     this.hideAll();
-    this.animPlayer.show();
+    const animPlayer = await this.ensureAnimPlayer();
+    animPlayer.show();
+    return animPlayer;
   }
 }

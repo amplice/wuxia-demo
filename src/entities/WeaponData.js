@@ -1,17 +1,9 @@
 import { WeaponType } from '../core/Constants.js';
 
 export const WEAPON_STATS = {
-  [WeaponType.JIAN]: {
-    name: 'Jian',
-    description: 'Balanced straight sword',
-    length: 1.0,
-    width: 0.02,
-    color: 0xccccdd,
-    guardSize: 0.08,
-  },
-  [WeaponType.DAO]: {
-    name: 'Dao',
-    description: 'Curved saber with power',
+  [WeaponType.KATANA]: {
+    name: 'Katana',
+    description: 'Curved sword',
     length: 0.9,
     width: 0.035,
     color: 0xddccaa,

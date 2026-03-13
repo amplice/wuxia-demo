@@ -1,0 +1,103 @@
+{
+  "file": "C:\\Users\\cobra\\wuxia-warrior\\ronin10.blend",
+  "scene": "Scene",
+  "armature": "Character_All",
+  "action": "strafe_right",
+  "frame": 0,
+  "bones": {
+    "neck": {
+      "parent": "spine3",
+      "rotation_mode": "QUATERNION",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_quaternion": [
+        0.966541,
+        0.247202,
+        0.020875,
+        0.065219
+      ],
+      "rotation_euler": null,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          0.990621,
+          -0.115753,
+          0.072599,
+          0.0
+        ],
+        [
+          0.136395,
+          0.869275,
+          -0.47514,
+          0.0
+        ],
+        [
+          -0.008109,
+          0.480586,
+          0.87691,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "head": {
+      "parent": "neck",
+      "rotation_mode": "QUATERNION",
+      "location": [
+        -0.0,
+        0.0,
+        -0.0
+      ],
+      "rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        -0.0
+      ],
+      "rotation_euler": null,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          -0.0
+        ],
+        [
+          -0.0,
+          1.0,
+          -0.0,
+          0.0
+        ],
+        [
+          -0.0,
+          -0.0,
+          1.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    }
+  }
+}

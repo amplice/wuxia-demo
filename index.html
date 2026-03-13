@@ -46,6 +46,22 @@
       font-size: 20px;
       color: #c8a84e;
       animation: pulse 2s ease-in-out infinite;
+      margin-bottom: 28px;
+    }
+    #title-screen .secondary-action {
+      background: none;
+      border: 1px solid rgba(200, 168, 78, 0.7);
+      color: #c8a84e;
+      font-family: 'Georgia', serif;
+      font-size: 13px;
+      letter-spacing: 2px;
+      padding: 10px 24px;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    #title-screen .secondary-action:hover {
+      background: rgba(200, 168, 78, 0.15);
+      border-color: #c8a84e;
     }
     @keyframes pulse {
       0%, 100% { opacity: 0.4; }
@@ -74,6 +90,15 @@
       gap: 30px;
       margin-bottom: 30px;
     }
+    .char-select-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(260px, 1fr));
+      gap: 32px;
+      width: min(760px, 92vw);
+    }
+    .char-select-column {
+      text-align: center;
+    }
     .select-btn {
       background: none;
       border: 1px solid #c8a84e;
@@ -96,6 +121,18 @@
       letter-spacing: 4px;
       margin-bottom: 15px;
       text-transform: uppercase;
+    }
+    .char-select-column .select-options {
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 0;
+    }
+
+    @media (max-width: 720px) {
+      .char-select-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
     }
 
     /* HUD */
@@ -221,6 +258,7 @@
       width: 100%; height: 100%;
       display: none;
       pointer-events: none;
+      z-index: 20;
     }
     #anim-player-screen > * { pointer-events: auto; }
 
@@ -247,7 +285,7 @@
       flex-direction: column;
       gap: 6px;
       margin-bottom: 20px;
-      max-height: 200px;
+      max-height: 50vh;
       overflow-y: auto;
       flex-shrink: 0;
     }
@@ -351,61 +389,6 @@
       background: rgba(200, 168, 78, 0.2);
     }
 
-    /* Transform controls */
-    .anim-transform-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 6px;
-    }
-    .anim-transform-row label {
-      color: #888;
-      font-size: 11px;
-      min-width: 32px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .anim-transform-slider {
-      flex: 1;
-      accent-color: #c8a84e;
-      cursor: pointer;
-    }
-    .anim-transform-num {
-      width: 55px;
-      background: #1a1a1a;
-      border: 1px solid #444;
-      color: #c8a84e;
-      font-family: 'Georgia', serif;
-      font-size: 12px;
-      padding: 2px 4px;
-      text-align: right;
-    }
-    .anim-transform-row span {
-      color: #666;
-      font-size: 10px;
-    }
-    .anim-keyframe-bar {
-      width: 100%;
-      height: 12px;
-      background: #1a1a1a;
-      border: 1px solid #333;
-      position: relative;
-      margin-bottom: 8px;
-      border-radius: 2px;
-    }
-    .anim-keyframe-marker {
-      position: absolute;
-      top: 1px;
-      width: 4px;
-      height: 10px;
-      background: #c8a84e;
-      border-radius: 1px;
-      cursor: pointer;
-    }
-    .anim-keyframe-marker:hover {
-      background: #e8d86e;
-    }
-
     /* Screen flash overlay */
     #screen-flash {
       position: absolute;
@@ -472,7 +455,7 @@
       <h1>WUXIA WARRIOR</h1>
       <div class="subtitle">THE WAY OF THE SWORD</div>
       <div class="prompt">PRESS ENTER TO BEGIN</div>
-      <!-- <button class="select-btn" id="anim-player-btn" style="margin-top: 30px; font-size: 14px; padding: 10px 30px; opacity: 0.7;">ANIMATION PLAYER</button> -->
+      <button class="secondary-action" id="anim-player-btn">PRESS P FOR ANIMATION LAB</button>
     </div>
 
     <!-- Select Screen -->
@@ -496,6 +479,18 @@
         </div>
       </div>
 
+      <div class="select-section">
+        <div class="char-select-grid">
+          <div class="char-select-column">
+            <h3>Player 1 Character</h3>
+            <div class="select-options" id="p1-char-options"></div>
+          </div>
+          <div class="char-select-column">
+            <h3 id="p2-char-heading">Computer Character</h3>
+            <div class="select-options" id="p2-char-options"></div>
+          </div>
+        </div>
+      </div>
 
       <button class="select-btn" id="start-fight-btn" style="margin-top: 20px; font-size: 22px; padding: 18px 60px;">FIGHT</button>
     </div>
@@ -547,7 +542,6 @@
         <div class="anim-time" id="anim-time">0.00s / 0.00s</div>
         <div class="anim-time" id="anim-frame" style="color:#c8a84e;font-size:16px;">Frame 0 / 0</div>
         <input type="range" class="anim-progress" id="anim-progress" min="0" max="100" value="0" step="0.1">
-        <div id="anim-keyframe-bar" class="anim-keyframe-bar"></div>
 
         <div class="anim-controls">
           <button class="anim-ctrl-btn" id="anim-btn-play">PLAY</button>
@@ -561,49 +555,6 @@
           <span class="anim-speed-value" id="anim-speed-value">1.00x</span>
           <button class="anim-ctrl-btn" id="anim-btn-speed-up">+</button>
         </div>
-
-        <div style="border-top:1px solid #333; margin:10px 0;"></div>
-        <h3 style="font-size:13px; margin-bottom:10px;">ROOT TRANSFORM</h3>
-
-        <div class="anim-transform-row">
-          <label>Rot Y</label>
-          <input type="range" id="anim-rotY" min="-180" max="180" value="0" step="1" class="anim-transform-slider">
-          <input type="number" id="anim-rotY-num" value="0" step="1" class="anim-transform-num">
-          <span>deg</span>
-        </div>
-        <div class="anim-transform-row">
-          <label>Pos X</label>
-          <input type="range" id="anim-posX" min="-5" max="5" value="0" step="0.01" class="anim-transform-slider">
-          <input type="number" id="anim-posX-num" value="0" step="0.01" class="anim-transform-num">
-        </div>
-        <div class="anim-transform-row">
-          <label>Pos Y</label>
-          <input type="range" id="anim-posY" min="-2" max="5" value="0" step="0.01" class="anim-transform-slider">
-          <input type="number" id="anim-posY-num" value="0" step="0.01" class="anim-transform-num">
-        </div>
-        <div class="anim-transform-row">
-          <label>Pos Z</label>
-          <input type="range" id="anim-posZ" min="-5" max="5" value="0" step="0.01" class="anim-transform-slider">
-          <input type="number" id="anim-posZ-num" value="0" step="0.01" class="anim-transform-num">
-        </div>
-        <div class="anim-transform-row">
-          <label>Scale</label>
-          <input type="range" id="anim-scale" min="0.1" max="3.0" value="1.0" step="0.01" class="anim-transform-slider">
-          <input type="number" id="anim-scale-num" value="1.0" step="0.01" class="anim-transform-num">
-        </div>
-
-        <div class="anim-controls" style="margin-top:8px;">
-          <button class="anim-ctrl-btn" id="anim-btn-set-key">SET KEY</button>
-          <button class="anim-ctrl-btn" id="anim-btn-del-key">DEL KEY</button>
-          <button class="anim-ctrl-btn" id="anim-btn-clear-keys">CLEAR</button>
-        </div>
-        <div class="anim-controls" style="margin-top:4px;">
-          <button class="anim-ctrl-btn" id="anim-btn-export">EXPORT JSON</button>
-          <button class="anim-ctrl-btn" id="anim-btn-import">IMPORT JSON</button>
-        </div>
-
-        <div style="border-top:1px solid #333; margin:10px 0;"></div>
-        <button class="anim-ctrl-btn" id="anim-btn-test-mode" style="margin-bottom:15px; width:100%;">TEST MODE: OFF</button>
 
         <button class="anim-back-btn" id="anim-btn-back">BACK TO TITLE</button>
       </div>

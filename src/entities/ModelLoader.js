@@ -3,45 +3,121 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
-let cachedModel = null;
-let cachedTexture = null;
-let cachedAnimations = [];
-let loadPromise = null;
-
-const ANIM_FILES = [
-  '/dao_attack1_cartwheel.glb',
-];
-
 export class ModelLoader {
-  static async load() {
-    if (cachedModel && cachedTexture) {
-      return { model: cachedModel, texture: cachedTexture, animations: cachedAnimations };
+  static RIGHT_HAND_BONE_NAMES = [
+    'hand_r', 'handr', 'righthand', 'hand_r_001',
+    'mixamorig_righthand', 'right_wrist', 'rightwrist',
+    'wrist_r', 'mixamorig_rightwrist',
+  ];
+
+  static LEFT_HAND_BONE_NAMES = [
+    'hand_l', 'handl', 'lefthand', 'hand_l_001',
+    'mixamorig_lefthand', 'left_wrist', 'leftwrist',
+    'wrist_l', 'mixamorig_leftwrist',
+  ];
+
+  static WEAPON_TIP_BONE_NAMES = [
+    'speartip', 'katanatip', 'swordtip', 'bladetip', 'weapontip', 'tip',
+  ];
+
+  static BODY_ANCHOR_BONE_NAMES = [
+    'spine1', 'mixamorig_spine1',
+    'spine', 'mixamorig_spine',
+    'spine2', 'mixamorig_spine2',
+    'pelvis', 'hips', 'mixamorig_hips',
+  ];
+
+  /**
+   * Load a character from its definition. Returns { model, clips, texture: null, charDef }.
+   */
+  static async loadCharacter(charDef) {
+    const gltf = await ModelLoader._loadGLB(charDef.glbPath);
+    const model = gltf.scene;
+    ModelLoader._pruneHelperNodes(model);
+
+    const clips = {};
+    for (const clip of gltf.animations) {
+      let name = clip.name.includes('|') ? clip.name.split('|').pop() : clip.name;
+      name = name.replace(/_(Character_All|Armature)$/, '');
+      clips[name] = clip;
     }
-    if (loadPromise) return loadPromise;
 
-    loadPromise = ModelLoader._doLoad();
-    return loadPromise;
-  }
-
-  static async _doLoad() {
-    const [model, texture, ...animResults] = await Promise.all([
-      ModelLoader._loadFBX('/Char_Ronin_01.fbx'),
-      ModelLoader._loadTexture('/Color_B_Gradient.jpg'),
-      ...ANIM_FILES.map(f => ModelLoader._loadGLB(f)),
-    ]);
-
-    const clips = [];
-    for (const gltf of animResults) {
-      if (gltf.animations && gltf.animations.length > 0) {
-        clips.push(...gltf.animations);
+    // Swap idle if configured
+    if (charDef.swapIdle) {
+      const { from, to } = charDef.swapIdle;
+      if (clips[from]) {
+        clips[to + '_orig'] = clips[to];
+        clips[to] = clips[from];
+        delete clips[from];
       }
     }
 
-    cachedModel = model;
-    cachedTexture = texture;
-    cachedAnimations = clips;
+    // Apply hips forward lean to walk/strafe/idle clips
+    if (charDef.hipsLeanDeg) {
+      const lean = charDef.hipsLeanDeg * (Math.PI / 180);
+      const leanQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), lean);
+      const q = new THREE.Quaternion();
 
-    return { model, texture, animations: clips };
+      const leanClips = [
+        ...(charDef.clipSpeedups.walk || []),
+        ...(charDef.clipSpeedups.strafe || []),
+        'idle',
+      ];
+      for (const clipName of leanClips) {
+        const clip = clips[clipName];
+        if (!clip) continue;
+        for (const track of clip.tracks) {
+          const n = track.name.toLowerCase();
+          if (n.includes('hips') && n.endsWith('.quaternion')) {
+            for (let i = 0; i < track.values.length; i += 4) {
+              q.set(track.values[i], track.values[i+1], track.values[i+2], track.values[i+3]);
+              q.premultiply(leanQ);
+              track.values[i] = q.x;
+              track.values[i+1] = q.y;
+              track.values[i+2] = q.z;
+              track.values[i+3] = q.w;
+            }
+          }
+        }
+      }
+    }
+
+    // Apply speed-ups from charDef.clipSpeedFactor to clip groups in charDef.clipSpeedups
+    if (charDef.clipSpeedups && charDef.clipSpeedFactor) {
+      for (const [group, names] of Object.entries(charDef.clipSpeedups)) {
+        const factor = charDef.clipSpeedFactor[group];
+        if (factor && factor !== 1) {
+          ModelLoader._speedUpClips(clips, names, factor);
+        }
+      }
+    }
+
+    // Zero out Hips horizontal root motion on attack clips (keep Y for vertical bob)
+    const attackClips = charDef.clipSpeedups?.attack || [];
+    for (const clipName of attackClips) {
+      const clip = clips[clipName];
+      if (!clip) continue;
+      for (const track of clip.tracks) {
+        const n = track.name.toLowerCase();
+        if (n.includes('hips') && n.endsWith('.position')) {
+          const vpk = track.values.length / track.times.length;
+          if (vpk === 3 && track.times.length > 0) {
+            const x0 = track.values[0];
+            const z0 = track.values[2];
+            for (let i = 0; i < track.times.length; i++) {
+              track.values[i * 3] = x0;
+              track.values[i * 3 + 2] = z0;
+            }
+          }
+        }
+      }
+    }
+
+    model.traverse((child) => {
+      if (child.isSkinnedMesh) child.frustumCulled = false;
+    });
+
+    return { model, clips, texture: null, charDef };
   }
 
   static _loadFBX(url) {
@@ -58,9 +134,6 @@ export class ModelLoader {
     });
   }
 
-  /**
-   * Prepare a model root: scale to 1.8 units, center, configure meshes.
-   */
   static _prepareRoot(r) {
     const box = new THREE.Box3().setFromObject(r);
     const height = box.getSize(new THREE.Vector3()).y;
@@ -76,10 +149,6 @@ export class ModelLoader {
     });
   }
 
-  /**
-   * Load multiple animation files for the animation player.
-   * Returns an array of { fileName, root, mixer, actions } entries.
-   */
   static async loadAnimPlayerEntries(items) {
     const allEntries = [];
 
@@ -144,7 +213,6 @@ export class ModelLoader {
           const clonedRoot = SkeletonUtils.clone(root);
           ModelLoader._prepareRoot(clonedRoot);
 
-          // Walk-in-place: lock root bone X/Z position
           if (split.inPlace) {
             for (const track of subClip.tracks) {
               if (track.name.match(/\.position$/) && track.name.startsWith('spine')) {
@@ -172,7 +240,11 @@ export class ModelLoader {
         }
       } else {
         for (const clip of clips) {
-          clip.name = fileName;
+          if (clips.length === 1) {
+            clip.name = fileName;
+          } else if (clip.name.includes('|')) {
+            clip.name = clip.name.split('|').pop();
+          }
           clip.trim();
 
           if (trimStartFrames > 0) {
@@ -229,165 +301,6 @@ export class ModelLoader {
     });
   }
 
-  static createFighterFromModel(model, texture, animations, tintColor = null) {
-    const clone = SkeletonUtils.clone(model);
-
-    clone.traverse((child) => {
-      if (child.isMesh) {
-        const applyToMat = (mat) => {
-          const m = mat.clone();
-          m.map = texture;
-          m.needsUpdate = true;
-          if (tintColor) m.color.set(tintColor);
-          return m;
-        };
-
-        if (Array.isArray(child.material)) {
-          child.material = child.material.map(applyToMat);
-        } else {
-          child.material = applyToMat(child.material);
-        }
-
-        child.castShadow = true;
-        child.receiveShadow = true;
-
-        if (child.isSkinnedMesh) {
-          child.frustumCulled = false;
-        }
-      }
-    });
-
-    const box = new THREE.Box3().setFromObject(clone);
-    const size = box.getSize(new THREE.Vector3());
-    const height = size.y;
-    const scale = 1.8 / height;
-    clone.scale.setScalar(scale);
-
-    box.setFromObject(clone);
-    const center = box.getCenter(new THREE.Vector3());
-    clone.position.x -= center.x;
-    clone.position.z -= center.z;
-    clone.position.y -= box.min.y;
-
-    const joints = {};
-    clone.traverse((child) => {
-      if (child.isBone) {
-        if (child.name === 'hand.L') joints.handL = child;
-        if (child.name === 'hand.R') joints.handR = child;
-      }
-    });
-
-    const mixer = new THREE.AnimationMixer(clone);
-    const actions = {};
-
-    for (const clip of animations) {
-      const action = mixer.clipAction(clip);
-      actions[clip.name] = action;
-    }
-
-    return { root: clone, joints, mixer, actions };
-  }
-
-  /**
-   * Load fight animation GLBs and prepare all clips for the game.
-   */
-  static async loadFightAnimations() {
-    const [gltf, texture] = await Promise.all([
-      ModelLoader._loadGLB('/character_all.glb'),
-      ModelLoader._loadTexture('/Color_B_Gradient.jpg'),
-    ]);
-
-    const model = gltf.scene;
-    const clips = {};
-    const ATTACK_SPEED = 3.5;
-    for (const clip of gltf.animations) {
-      if (clip.name === 'attack') {
-        ModelLoader._speedUpClips({ attack: clip }, ['attack'], ATTACK_SPEED);
-      }
-      clips[clip.name] = clip;
-    }
-
-    return { model, texture, clips };
-  }
-
-  /**
-   * Load spearman GLB with all animations.
-   */
-  static async loadSpearmanAnimations() {
-    const gltf = await ModelLoader._loadGLB('/spearman.glb');
-    const model = gltf.scene;
-
-    const clips = {};
-
-    for (const clip of gltf.animations) {
-      let name = clip.name.includes('|') ? clip.name.split('|').pop() : clip.name;
-      clips[name] = clip;
-    }
-
-    // Swap idle_alt to be the main idle (looks better in game)
-    if (clips['idle_alt']) {
-      clips['idle_orig'] = clips['idle'];
-      clips['idle'] = clips['idle_alt'];
-      delete clips['idle_alt'];
-    }
-
-    // Lean animations slightly forward by rotating Hips X
-    const WALK_LEAN = 0.08; // radians (~4.5 degrees forward lean)
-    for (const clipName of ['walk_forward', 'walk_backward', 'idle', 'strafe_left', 'strafe_right']) {
-      const clip = clips[clipName];
-      if (!clip) continue;
-      for (const track of clip.tracks) {
-        const n = track.name.toLowerCase();
-        if (n.includes('hips') && n.endsWith('.quaternion')) {
-          const q = new THREE.Quaternion();
-          const lean = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), WALK_LEAN);
-          for (let i = 0; i < track.values.length; i += 4) {
-            q.set(track.values[i], track.values[i+1], track.values[i+2], track.values[i+3]);
-            q.premultiply(lean);
-            track.values[i] = q.x;
-            track.values[i+1] = q.y;
-            track.values[i+2] = q.z;
-            track.values[i+3] = q.w;
-          }
-        }
-      }
-    }
-
-    ModelLoader._speedUpClips(clips, ['walk_forward', 'walk_backward'], 2);
-    ModelLoader._speedUpClips(clips, ['strafe_left', 'strafe_right'], 2);
-    ModelLoader._speedUpClips(clips, ['attack_quick', 'attack_heavy', 'attack_thrust'], 2);
-
-    // Zero out Hips horizontal root motion on attacks (keep character in place)
-    // Keep Y (vertical bob) so feet stay planted during steps
-    for (const clipName of ['attack_quick', 'attack_heavy', 'attack_thrust']) {
-      const clip = clips[clipName];
-      if (!clip) continue;
-      for (const track of clip.tracks) {
-        const n = track.name.toLowerCase();
-        if (n.includes('hips') && n.endsWith('.position')) {
-          const vpk = track.values.length / track.times.length;
-          if (vpk === 3 && track.times.length > 0) {
-            const x0 = track.values[0];
-            const z0 = track.values[2];
-            for (let i = 0; i < track.times.length; i++) {
-              track.values[i * 3] = x0;
-              // Y (i*3+1) kept — vertical bob plants feet
-              track.values[i * 3 + 2] = z0;
-            }
-          }
-        }
-      }
-    }
-
-    model.traverse((child) => {
-      if (child.isSkinnedMesh) {
-        child.frustumCulled = false;
-      }
-    });
-
-    return { model, clips };
-  }
-
   /**
    * Speed up animation clips by compressing keyframe times.
    * Creates new Float32Arrays (in-place modification causes jerky playback).
@@ -409,13 +322,38 @@ export class ModelLoader {
     }
   }
 
+  static _pruneRedundantTracks(clip) {
+    clip.tracks = clip.tracks.filter((track) => {
+      const lowerName = track.name.toLowerCase();
+      if (!lowerName.endsWith('.position') && !lowerName.endsWith('.scale')) {
+        return true;
+      }
+
+      const valuesPerKey = track.values.length / Math.max(track.times.length, 1);
+      if (!Number.isFinite(valuesPerKey) || valuesPerKey <= 0) {
+        return true;
+      }
+
+      for (let i = valuesPerKey; i < track.values.length; i++) {
+        const base = track.values[i % valuesPerKey];
+        if (Math.abs(track.values[i] - base) > 1e-4) {
+          return true;
+        }
+      }
+
+      // Keep animated root translation; strip all constant translations/scales.
+      return false;
+    });
+    clip.resetDuration();
+  }
+
   /**
    * Create a fighter instance from a GLB model with fight animation clips.
    */
   static createFighterFromGLB(model, clips, tintColor = null, texture = null) {
     const clone = SkeletonUtils.clone(model);
+    ModelLoader._pruneHelperNodes(clone);
 
-    // Apply gradient texture and tint color
     clone.traverse((child) => {
       if (child.isMesh) {
         const applyMat = (mat) => {
@@ -433,19 +371,16 @@ export class ModelLoader {
       }
     });
 
-    // Scale to ~1.8 units tall
     const box = new THREE.Box3().setFromObject(clone);
     const height = box.getSize(new THREE.Vector3()).y;
     if (height > 0) clone.scale.setScalar(1.8 / height);
 
-    // Re-center
     box.setFromObject(clone);
     const center = box.getCenter(new THREE.Vector3());
     clone.position.x -= center.x;
     clone.position.z -= center.z;
     clone.position.y -= box.min.y;
 
-    // Disable frustum culling on skinned meshes, enable shadows
     clone.traverse((child) => {
       if (child.isSkinnedMesh) child.frustumCulled = false;
       if (child.isMesh) {
@@ -454,24 +389,40 @@ export class ModelLoader {
       }
     });
 
-    // Find hand bones for weapon attachment, and SpearControl for baked spear
     const joints = {};
     clone.traverse((child) => {
       if (child.isBone) {
-        const n = child.name.toLowerCase();
-        if (n === 'hand.r' || n === 'handr' || n === 'hand_r' || n === 'righthand' || n === 'hand.r.001' || n === 'mixamorig:righthand') {
+        const n = ModelLoader._normalizeBoneName(child.name);
+        if (!joints.handR && ModelLoader.RIGHT_HAND_BONE_NAMES.includes(n)) {
           joints.handR = child;
         }
-        if (n === 'hand.l' || n === 'handl' || n === 'hand_l' || n === 'lefthand' || n === 'hand.l.001' || n === 'mixamorig:lefthand') {
+        if (!joints.handL && ModelLoader.LEFT_HAND_BONE_NAMES.includes(n)) {
           joints.handL = child;
         }
-        if (n === 'speartip') {
+        if (!joints.weaponTip && ModelLoader.WEAPON_TIP_BONE_NAMES.includes(n)) {
+          joints.weaponTip = child;
+        } else if (!joints.weaponTip && n.endsWith('tip')) {
+          joints.weaponTip = child;
+        }
+        if (!joints.spearTip && n === 'speartip') {
           joints.spearTip = child;
+        }
+        if (!joints.bodyAnchor && ModelLoader.BODY_ANCHOR_BONE_NAMES.includes(n)) {
+          joints.bodyAnchor = child;
         }
       }
     });
 
-    // Set up AnimationMixer and register all clips as actions
+    if (!joints.weaponTip && joints.spearTip) {
+      joints.weaponTip = joints.spearTip;
+    }
+
+    clone.updateWorldMatrix(true, true);
+    if (joints.bodyAnchor) {
+      const anchorWorld = joints.bodyAnchor.getWorldPosition(new THREE.Vector3());
+      joints.bodyAnchorLocalOffset = clone.worldToLocal(anchorWorld.clone());
+    }
+
     const mixer = new THREE.AnimationMixer(clone);
     const actions = {};
     for (const [name, clip] of Object.entries(clips)) {
@@ -479,5 +430,22 @@ export class ModelLoader {
     }
 
     return { root: clone, joints, mixer, actions };
+  }
+
+  static _pruneHelperNodes(root) {
+    const toRemove = [];
+    root.traverse((child) => {
+      const lower = child.name.toLowerCase();
+      if (lower === 'icosphere' || lower.includes('griptarget')) {
+        toRemove.push(child);
+      }
+    });
+    for (const child of toRemove) {
+      if (child.parent) child.parent.remove(child);
+    }
+  }
+
+  static _normalizeBoneName(name) {
+    return name.toLowerCase().replace(/\s+/g, '').replace(/[\-:.]/g, '_');
   }
 }

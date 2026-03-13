@@ -1,68 +1,47 @@
 import * as THREE from 'three';
-import { FighterBuilder } from './FighterBuilder.js';
 import { ModelLoader } from './ModelLoader.js';
 import { Weapon } from './Weapon.js';
 import { FighterStateMachine } from '../combat/FighterStateMachine.js';
 import { DamageSystem } from '../combat/DamageSystem.js';
-import { ProceduralAnimator } from '../animation/ProceduralAnimator.js';
 import { TrailEffect } from '../animation/TrailEffect.js';
 import {
-  getStancePose, getAttackPose, getBlockPose,
-  getHitStunPose, getDyingPose, getDodgePose, getWalkPose,
-} from '../animation/AnimationLibrary.js';
-import {
   FighterState, AttackType, WeaponType,
-  FIGHT_START_DISTANCE,
   SIDESTEP_DASH_FRAMES, SIDESTEP_DASH_DISTANCE,
   BACKSTEP_FRAMES, BACKSTEP_DISTANCE,
+  STEP_DISTANCE, STEP_FRAMES, STEP_COOLDOWN_FRAMES,
 } from '../core/Constants.js';
 import { distance2D } from '../utils/MathUtils.js';
 
+const _relativeVelocity = new THREE.Vector3();
+const _toTarget = new THREE.Vector3();
+const _spearForward = new THREE.Vector3();
+const _debugOpponentCenter = new THREE.Vector3();
+const _selfBodyPosition = new THREE.Vector3();
+const _opponentBodyPosition = new THREE.Vector3();
+
 export class Fighter {
-  constructor(playerIndex, color, weaponType = WeaponType.JIAN, modelData = null, fightAnimData = null) {
+  constructor(playerIndex, color, charDef, animData) {
     this.playerIndex = playerIndex;
     this.isP2 = playerIndex === 1;
-    this.weaponType = weaponType;
-    this.useFBX = false;
-    this.useClips = false;
+    this.charDef = charDef;
+    this.weaponType = charDef.weaponType;
 
     this.mixer = null;
-    this.animActions = {};
-    this.currentAnimAction = null;
-
     this.clipActions = {};
     this.activeClipName = null;
 
-    let root, joints;
+    const tint = this.isP2 ? 0xaabbff : 0xffcccc;
+    const result = ModelLoader.createFighterFromGLB(
+      animData.model, animData.clips, tint, animData.texture
+    );
+    const root = result.root;
+    const joints = result.joints;
+    this.mixer = result.mixer;
+    this.clipActions = result.actions;
 
-    if (fightAnimData) {
-      const tint = this.isP2 ? 0xaabbff : 0xffcccc;
-      const result = ModelLoader.createFighterFromGLB(
-        fightAnimData.model, fightAnimData.clips, tint, fightAnimData.texture
-      );
-      root = result.root;
-      joints = result.joints;
-      this.mixer = result.mixer;
-      this.clipActions = result.actions;
-      this.useClips = true;
-      // Apply model-specific root rotation (e.g. Mixamo models face -Z, need PI flip)
-      if (fightAnimData.rootRotationY) {
-        root.rotation.y = fightAnimData.rootRotationY;
-      }
-    } else if (modelData) {
-      const tint = this.isP2 ? 0xaabbff : 0xffcccc;
-      const result = ModelLoader.createFighterFromModel(
-        modelData.model, modelData.texture, modelData.animations || [], tint
-      );
-      root = result.root;
-      joints = result.joints;
-      this.mixer = result.mixer || null;
-      this.animActions = result.actions || {};
-      this.useFBX = true;
-    } else {
-      const result = FighterBuilder.build(color, this.isP2);
-      root = result.root;
-      joints = result.joints;
+    // Apply model-specific root rotation (e.g. Mixamo models face -Z, need PI flip)
+    if (charDef.rootRotationY) {
+      root.rotation.y = charDef.rootRotationY;
     }
 
     this.root = root;
@@ -71,7 +50,7 @@ export class Fighter {
     this.group = new THREE.Group();
     this.group.add(this.root);
 
-    this.weapon = new Weapon(weaponType);
+    this.weapon = new Weapon(this.weaponType);
 
     const trailColor = this.isP2 ? 0x4488ff : 0xff4444;
     this.trail = new TrailEffect(trailColor);
@@ -79,7 +58,6 @@ export class Fighter {
     // Systems
     this.damageSystem = new DamageSystem();
     this.fsm = new FighterStateMachine(this);
-    this.animator = new ProceduralAnimator(joints, this.useFBX || this.useClips);
 
     // State indicators (floating shapes above head)
     this._stateIndicator = this._createStateIndicators();
@@ -98,29 +76,36 @@ export class Fighter {
     this._stepDirection = 0; // +1 = toward, -1 = away
     this._stepCooldown = 0;
 
+    // Knockback multiplier (set by Game on clash/block for heavy advantage)
+    this.knockbackMult = 1;
+
     // Ragdoll state
     this._ragdoll = null;
+
+    this._tipWorldPosition = new THREE.Vector3();
+    this._tipVelocity = new THREE.Vector3();
+    this._baseWorldPosition = new THREE.Vector3();
+    this._baseVelocity = new THREE.Vector3();
+    this._tipMotionInitialized = false;
+    this._debugCollision = null;
   }
 
   _createStateIndicators() {
     const g = new THREE.Group();
-    g.position.y = 2.2; // float above head
+    g.position.y = 2.2;
 
-    // Block: blue cube
     const blockGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
     const blockMat = new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: 0.8 });
     const block = new THREE.Mesh(blockGeo, blockMat);
     block.visible = false;
     g.add(block);
 
-    // Parry: yellow tetrahedron (cone with 4 sides)
     const parryGeo = new THREE.ConeGeometry(0.15, 0.25, 4);
     const parryMat = new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, opacity: 0.9 });
     const parry = new THREE.Mesh(parryGeo, parryMat);
     parry.visible = false;
     g.add(parry);
 
-    // Parry success: green diamond (rotated cube)
     const successGeo = new THREE.OctahedronGeometry(0.15);
     const successMat = new THREE.MeshBasicMaterial({ color: 0x44ff44, transparent: true, opacity: 0.9 });
     const success = new THREE.Mesh(successGeo, successMat);
@@ -137,20 +122,27 @@ export class Fighter {
   get hitApplied() { return this.fsm.hitApplied; }
   set hitApplied(v) { this.fsm.hitApplied = v; }
 
+  _syncWorldMatrices() {
+    this.group.updateWorldMatrix(true, true);
+  }
+
   update(dt, opponent) {
     // Ragdoll physics override
     if (this._ragdoll) {
       this._updateRagdoll(dt);
-      if (this.useClips && this.mixer) this.mixer.update(dt);
+      if (this.mixer) this.mixer.update(dt);
       this._updateTrail();
+      this._updateTipMotion();
       return;
     }
 
     // Face toward opponent — but lock facing and rotation during attacks
-    if (opponent) {
-      if (!this.fsm.isAttacking) {
-        const dx = opponent.position.x - this.position.x;
-        const dz = opponent.position.z - this.position.z;
+    if (opponent && !this.fsm.isAttacking) {
+      this.getBodyCollisionPosition(_selfBodyPosition);
+      opponent.getBodyCollisionPosition(_opponentBodyPosition);
+      const dx = _opponentBodyPosition.x - _selfBodyPosition.x;
+      const dz = _opponentBodyPosition.z - _selfBodyPosition.z;
+      if ((dx * dx + dz * dz) > 1e-6) {
         this.facingRight = dx >= 0;
         this.group.rotation.y = Math.atan2(dx, dz);
       }
@@ -160,7 +152,7 @@ export class Fighter {
     this.fsm.update();
 
     // Update animation based on state
-    this._updateAnimation();
+    this._updateClipAnimation();
 
     // Attack lunge — move toward opponent during active frames
     if (this.state === FighterState.ATTACK_ACTIVE && this.currentAttackData) {
@@ -192,13 +184,12 @@ export class Fighter {
     if (this.state === FighterState.DODGE) {
       const speed = BACKSTEP_DISTANCE / BACKSTEP_FRAMES * 60;
       const angle = this.group.rotation.y;
-      // Backward = opposite of facing
       this.position.x -= Math.sin(angle) * speed * dt;
       this.position.z -= Math.cos(angle) * speed * dt;
     }
 
     // Update mixer for clip-based animations
-    if (this.useClips && this.mixer) {
+    if (this.mixer) {
       this.mixer.update(dt);
     }
 
@@ -208,261 +199,146 @@ export class Fighter {
     // Update state indicators
     this._updateStateIndicators();
 
+    this._updateTipMotion();
+
     // Walk animation phase
     if (this.state === FighterState.WALK_FORWARD || this.state === FighterState.WALK_BACK) {
       this.walkPhase += dt * 8;
     }
   }
 
-  _mirrorPose(pose) {
-    if (!this.isP2) return pose;
-    const mirrored = {};
-    for (const [joint, rot] of Object.entries(pose)) {
-      let newJoint = joint;
-      if (joint.endsWith('R')) newJoint = joint.slice(0, -1) + 'L';
-      else if (joint.endsWith('L')) newJoint = joint.slice(0, -1) + 'R';
-      mirrored[newJoint] = {
-        rx: rot.rx,
-        ry: rot.ry ? -rot.ry : 0,
-        rz: rot.rz ? -rot.rz : 0,
-      };
+  getWeaponTipWorldPosition(target = new THREE.Vector3()) {
+    this._syncWorldMatrices();
+    const tipJoint = this.joints.weaponTip || this.joints.spearTip;
+    if (tipJoint) {
+      return tipJoint.getWorldPosition(target);
     }
-    return mirrored;
+    return target.copy(this.weapon.getTipWorldPosition());
   }
 
-  _updateAnimation() {
-    if (this.useClips) {
-      this._updateClipAnimation();
-      return;
+  getWeaponBaseWorldPosition(target = new THREE.Vector3()) {
+    this._syncWorldMatrices();
+    const handJoint = this.joints.handR || this.joints.handL;
+    if (handJoint) {
+      return handJoint.getWorldPosition(target);
     }
-    if (this.useFBX) {
-      this._updateFBXAnimation();
-      return;
-    }
-
-    const state = this.state;
-    let pose;
-    let speed = 0.15;
-
-    switch (state) {
-      case FighterState.IDLE:
-      case FighterState.WALK_FORWARD:
-      case FighterState.WALK_BACK:
-        pose = getStancePose();
-        if (state === FighterState.WALK_FORWARD || state === FighterState.WALK_BACK) {
-          const walkOffset = getWalkPose(state === FighterState.WALK_FORWARD);
-          const phase = Math.sin(this.walkPhase);
-          const blended = { ...pose };
-          for (const [joint, rot] of Object.entries(walkOffset)) {
-            if (blended[joint]) {
-              blended[joint] = {
-                rx: (blended[joint].rx || 0) + (rot.rx || 0) * phase,
-                ry: (blended[joint].ry || 0) + (rot.ry || 0) * phase,
-                rz: (blended[joint].rz || 0) + (rot.rz || 0) * phase,
-              };
-            }
-          }
-          pose = blended;
-        }
-        speed = 0.12;
-        break;
-
-      case FighterState.SIDESTEP:
-        pose = getDodgePose();
-        speed = 0.2;
-        break;
-
-      case FighterState.ATTACK_STARTUP: {
-        const heavy = this.fsm.currentAttackType === AttackType.HEAVY;
-        pose = getAttackPose(this.fsm.currentAttackType, 'startup');
-        speed = heavy ? 0.12 : 0.25;
-        break;
-      }
-
-      case FighterState.ATTACK_ACTIVE: {
-        const heavy = this.fsm.currentAttackType === AttackType.HEAVY;
-        pose = getAttackPose(this.fsm.currentAttackType, 'active');
-        speed = heavy ? 0.18 : 0.35;
-        break;
-      }
-
-      case FighterState.ATTACK_RECOVERY: {
-        const heavy = this.fsm.currentAttackType === AttackType.HEAVY;
-        pose = getStancePose();
-        speed = heavy ? 0.05 : 0.1;
-        break;
-      }
-
-      case FighterState.BLOCK:
-      case FighterState.BLOCK_STUN:
-        pose = getBlockPose();
-        speed = 0.2;
-        break;
-
-      case FighterState.PARRY:
-      case FighterState.PARRY_SUCCESS:
-        pose = getBlockPose();
-        speed = 0.3;
-        break;
-
-      case FighterState.HIT_STUN:
-      case FighterState.PARRIED_STUN:
-        pose = getHitStunPose();
-        speed = 0.2;
-        break;
-
-      case FighterState.DODGE:
-        pose = getDodgePose();
-        speed = 0.25;
-        break;
-
-      case FighterState.CLASH:
-        pose = getBlockPose();
-        speed = 0.2;
-        break;
-
-      case FighterState.DYING:
-      case FighterState.DEAD:
-        pose = getDyingPose();
-        speed = 0.08;
-        break;
-
-      default:
-        pose = getStancePose();
-    }
-
-    this.animator.setTargetPose(this._mirrorPose(pose), speed);
-    this.animator.update();
+    return target.copy(this.position).setY(1.2);
   }
 
-  _updateFBXAnimation() {
-    const state = this.state;
-    const DEG = Math.PI / 180;
-    const dir = this.facingRight ? 1 : -1;
-
-    let tiltX = 0;
-    let tiltZ = 0;
-    let bobY = 0;
-    let squash = 1;
-
-    switch (state) {
-      case FighterState.IDLE:
-        bobY = Math.sin(performance.now() * 0.003) * 0.02;
-        break;
-
-      case FighterState.WALK_FORWARD:
-        tiltX = 8 * DEG;
-        bobY = Math.sin(this.walkPhase) * 0.04;
-        break;
-
-      case FighterState.WALK_BACK:
-        tiltX = -5 * DEG;
-        bobY = Math.sin(this.walkPhase) * 0.03;
-        break;
-
-      case FighterState.SIDESTEP:
-        tiltZ = 10 * DEG * dir;
-        bobY = -0.05;
-        break;
-
-      case FighterState.ATTACK_STARTUP:
-        tiltX = -12 * DEG;
-        bobY = -0.04;
-
-        break;
-
-      case FighterState.ATTACK_ACTIVE:
-        tiltX = 15 * DEG;
-
-        bobY = -0.03;
-        break;
-
-      case FighterState.ATTACK_RECOVERY:
-        tiltX = 3 * DEG;
-
-        break;
-
-      case FighterState.BLOCK:
-      case FighterState.BLOCK_STUN:
-        tiltX = -6 * DEG;
-        bobY = -0.08;
-        squash = 0.96;
-        break;
-
-      case FighterState.PARRY:
-      case FighterState.PARRY_SUCCESS:
-        tiltX = -3 * DEG;
-        bobY = -0.05;
-        break;
-
-      case FighterState.HIT_STUN:
-        tiltX = -18 * DEG;
-        tiltZ = 8 * DEG;
-        bobY = -0.05;
-
-        break;
-
-      case FighterState.PARRIED_STUN:
-        tiltX = -15 * DEG;
-        tiltZ = -10 * DEG;
-
-        break;
-
-      case FighterState.DODGE:
-        bobY = -0.2;
-        squash = 0.85;
-        tiltX = 10 * DEG;
-        break;
-
-      case FighterState.CLASH:
-        tiltX = -10 * DEG;
-
-        bobY = -0.03;
-        break;
-
-      case FighterState.DYING:
-        tiltX = -35 * DEG;
-        tiltZ = 15 * DEG;
-        bobY = -0.3 * Math.min(this.stateFrames / 30, 1);
-        squash = 0.9;
-        break;
-
-      case FighterState.DEAD:
-        tiltX = -50 * DEG;
-        tiltZ = 20 * DEG;
-        bobY = -0.4;
-        squash = 0.85;
-        break;
+  getBodyAnchorWorldPosition(target = new THREE.Vector3()) {
+    this._syncWorldMatrices();
+    const bodyAnchorLocalOffset = this.joints.bodyAnchorLocalOffset;
+    if (bodyAnchorLocalOffset) {
+      return this.root.localToWorld(target.copy(bodyAnchorLocalOffset));
     }
-
-    const isHeavyAttack = this.fsm.isAttacking && this.fsm.currentAttackType === AttackType.HEAVY;
-    const t = isHeavyAttack ? 0.07 : 0.15;
-    const r = this.root;
-
-    if (this._fbxBaseScale == null) {
-      this._fbxBaseScale = r.scale.x;
+    const bodyAnchor = this.joints.bodyAnchor;
+    if (bodyAnchor) {
+      return bodyAnchor.getWorldPosition(target);
     }
-    const bs = this._fbxBaseScale;
-
-    r.rotation.x += (tiltX - r.rotation.x) * t;
-    r.rotation.z += (tiltZ - r.rotation.z) * t;
-
-    if (this._fbxBobY == null) this._fbxBobY = 0;
-    this._fbxBobY += (bobY - this._fbxBobY) * t;
-    if (this._fbxBaseY == null) this._fbxBaseY = r.position.y;
-    r.position.y = this._fbxBaseY + this._fbxBobY;
-
-    const sy = bs * (1 + (squash - 1));
-    r.scale.y += (sy - r.scale.y) * t;
+    return target.copy(this.position).setY(0.9);
   }
 
+  getBodyCollisionPosition(target = new THREE.Vector3()) {
+    this.getBodyAnchorWorldPosition(target);
+    target.y = this.position.y;
+    return target;
+  }
+
+  getHurtCenterWorldPosition(target = new THREE.Vector3()) {
+    this.getBodyAnchorWorldPosition(target);
+    target.y = this.position.y + 0.9;
+    return target;
+  }
+
+  getTipRelativeVelocityToward(target) {
+    _relativeVelocity.subVectors(this._tipVelocity, this._baseVelocity);
+    _toTarget.subVectors(target, this._tipWorldPosition);
+    if (_toTarget.lengthSq() < 1e-6) return 0;
+    _toTarget.normalize();
+    return _relativeVelocity.dot(_toTarget);
+  }
+
+  getTipRelativeForwardSpeed() {
+    _relativeVelocity.subVectors(this._tipVelocity, this._baseVelocity);
+    _spearForward.subVectors(this._tipWorldPosition, this._baseWorldPosition);
+    if (_spearForward.lengthSq() < 1e-6) return 0;
+    _spearForward.normalize();
+    return _relativeVelocity.dot(_spearForward);
+  }
+
+  getTipRelativeSpeed() {
+    _relativeVelocity.subVectors(this._tipVelocity, this._baseVelocity);
+    return _relativeVelocity.length();
+  }
+
+  _updateTipMotion() {
+    const tip = this.getWeaponTipWorldPosition(new THREE.Vector3());
+    const base = this.getWeaponBaseWorldPosition(new THREE.Vector3());
+    if (this._tipMotionInitialized) {
+      this._tipVelocity.subVectors(tip, this._tipWorldPosition);
+      this._baseVelocity.subVectors(base, this._baseWorldPosition);
+    } else {
+      this._tipVelocity.set(0, 0, 0);
+      this._baseVelocity.set(0, 0, 0);
+      this._tipMotionInitialized = true;
+    }
+    this._tipWorldPosition.copy(tip);
+    this._baseWorldPosition.copy(base);
+  }
+
+  applyMovementInput(direction, opponent, dt) {
+    if (!opponent) return false;
+    if (this.state === FighterState.DEAD || this.state === FighterState.DYING) return false;
+
+    this.getBodyCollisionPosition(_selfBodyPosition);
+    opponent.getBodyCollisionPosition(_opponentBodyPosition);
+    const dx = _opponentBodyPosition.x - _selfBodyPosition.x;
+    const dz = _opponentBodyPosition.z - _selfBodyPosition.z;
+    const dist = Math.sqrt(dx * dx + dz * dz) || 0.01;
+    const nx = dx / dist;
+    const nz = dz / dist;
+    const desiredDirection = Math.sign(direction);
+
+    let isMoving = false;
+
+    if (this._stepping) {
+      const stepSpeed = STEP_DISTANCE / STEP_FRAMES * 60;
+      this.position.x += nx * this._stepDirection * stepSpeed * dt;
+      this.position.z += nz * this._stepDirection * stepSpeed * dt;
+      this._stepFrames++;
+      isMoving = true;
+
+      if (this._stepFrames >= STEP_FRAMES) {
+        this._stepping = false;
+        this._stepFrames = 0;
+        this._stepCooldown = STEP_COOLDOWN_FRAMES;
+      }
+    }
+
+    if (this._stepCooldown > 0) {
+      this._stepCooldown--;
+    }
+
+    if (!this._stepping && desiredDirection !== 0 && this._stepCooldown <= 0 && this.fsm.isActionable) {
+      this._stepping = true;
+      this._stepFrames = 0;
+      this._stepDirection = desiredDirection;
+      this.fsm.transition(desiredDirection > 0 ? FighterState.WALK_FORWARD : FighterState.WALK_BACK);
+      isMoving = true;
+    }
+
+    if (!isMoving && !this._stepping && this._stepCooldown <= 0 && this.fsm.isActionable) {
+      this.stopMoving();
+    }
+
+    return isMoving;
+  }
 
   _updateClipAnimation() {
     const state = this.state;
     let clipName = 'idle';
     let loopOnce = false;
 
-    // Helper to pick first available clip name
     const pick = (...names) => {
       for (const n of names) {
         if (this.clipActions[n]) return n;
@@ -472,15 +348,47 @@ export class Fighter {
 
     switch (state) {
       case FighterState.IDLE:
-      case FighterState.BLOCK:
-      case FighterState.BLOCK_STUN:
-      case FighterState.PARRY:
-      case FighterState.PARRY_SUCCESS:
-      case FighterState.PARRIED_STUN:
-      case FighterState.HIT_STUN:
-      case FighterState.DODGE:
-      case FighterState.CLASH:
         clipName = 'idle';
+        break;
+
+      case FighterState.BLOCK:
+        clipName = pick('block_parry', 'idle');
+        loopOnce = true;
+        break;
+
+      case FighterState.BLOCK_STUN:
+        clipName = pick('block_knockback', 'idle');
+        loopOnce = true;
+        break;
+
+      case FighterState.PARRY:
+        clipName = pick('block_parry', 'idle');
+        loopOnce = true;
+        break;
+
+      case FighterState.PARRY_SUCCESS:
+        clipName = pick('block_parry', 'idle');
+        loopOnce = true;
+        break;
+
+      case FighterState.PARRIED_STUN:
+        clipName = pick('clash_knockback', 'idle');
+        loopOnce = true;
+        break;
+
+      case FighterState.HIT_STUN:
+        clipName = pick('clash_knockback', 'idle');
+        loopOnce = true;
+        break;
+
+      case FighterState.DODGE:
+        clipName = pick('backstep', 'idle');
+        loopOnce = true;
+        break;
+
+      case FighterState.CLASH:
+        clipName = pick('clash_knockback', 'idle');
+        loopOnce = true;
         break;
 
       case FighterState.WALK_FORWARD:
@@ -556,28 +464,8 @@ export class Fighter {
     }
 
     if (this.trail.active) {
-      let tip, base;
-      if (this.joints.spearTip) {
-        // Baked spear: use SpearControl bone for tip, handR for base
-        tip = new THREE.Vector3();
-        this.joints.spearTip.getWorldPosition(tip);
-        base = new THREE.Vector3();
-        const handJoint = this.joints.handR || this.joints.handL;
-        if (handJoint) {
-          handJoint.getWorldPosition(base);
-        } else {
-          base.copy(this.position).setY(1.2);
-        }
-      } else {
-        tip = this.weapon.getTipWorldPosition();
-        base = new THREE.Vector3();
-        const handJoint = this.joints.handR || this.joints.handL;
-        if (handJoint) {
-          handJoint.getWorldPosition(base);
-        } else {
-          base.copy(this.position).setY(1.2);
-        }
-      }
+      const tip = this.getWeaponTipWorldPosition(new THREE.Vector3());
+      const base = this.getWeaponBaseWorldPosition(new THREE.Vector3());
       this.trail.update(tip, base);
     }
   }
@@ -592,7 +480,6 @@ export class Fighter {
     ind.parry.visible = parryActive;
     ind.success.visible = (s === FighterState.PARRY_SUCCESS);
 
-    // Spin the active indicator
     const time = performance.now() * 0.003;
     if (ind.parry.visible) ind.parry.rotation.y = time * 3;
     if (ind.success.visible) {
@@ -601,7 +488,6 @@ export class Fighter {
     }
     if (ind.block.visible) ind.block.rotation.y = time * 2;
 
-    // Counter-rotate so indicators always face camera (cancel parent group rotation)
     ind.group.rotation.y = -this.group.rotation.y;
   }
 
@@ -622,8 +508,7 @@ export class Fighter {
 
   attack(type) {
     const result = this.fsm.startAttack(type);
-    if (result && this.useClips) {
-      // Find the right clip for the attack type
+    if (result) {
       let clipName;
       if (type === AttackType.THRUST) {
         clipName = this.clipActions.attack_thrust ? 'attack_thrust' : 'attack';
@@ -634,7 +519,6 @@ export class Fighter {
       }
       const action = this.clipActions[clipName];
       if (action) {
-        // Only adjust timeScale if using a single shared attack clip
         const hasSeparateClips = this.clipActions.attack_quick || this.clipActions.attack_heavy || this.clipActions.attack_thrust;
         const timeScale = (!hasSeparateClips && type === AttackType.HEAVY) ? 0.5 : 1.0;
         action.timeScale = timeScale;
@@ -660,14 +544,83 @@ export class Fighter {
   }
 
   distanceTo(other) {
+    this.getBodyCollisionPosition(_selfBodyPosition);
+    other.getBodyCollisionPosition(_opponentBodyPosition);
     return distance2D(
-      this.position.x, this.position.z,
-      other.position.x, other.position.z
+      _selfBodyPosition.x, _selfBodyPosition.z,
+      _opponentBodyPosition.x, _opponentBodyPosition.z
     );
   }
 
+  getDebugSnapshot(opponent = null) {
+    let tipRelativeToward = 0;
+    const weaponTip = this.getWeaponTipWorldPosition(new THREE.Vector3());
+    const weaponBase = this.getWeaponBaseWorldPosition(new THREE.Vector3());
+    const bodyRadius = typeof this.charDef.bodyRadius === 'number'
+      ? this.charDef.bodyRadius
+      : ((typeof this.charDef.bodySeparation === 'number' ? this.charDef.bodySeparation : 0.8) * 0.5);
+    const hurtCenter = this.getHurtCenterWorldPosition(new THREE.Vector3());
+    const bodyCollision = this.getBodyCollisionPosition(new THREE.Vector3());
+    if (opponent) {
+      opponent.getHurtCenterWorldPosition(_debugOpponentCenter);
+      tipRelativeToward = this.getTipRelativeVelocityToward(_debugOpponentCenter);
+    }
+
+    return {
+      charName: this.charDef.displayName || 'Unknown',
+      weaponType: this.weaponType,
+      state: this.state,
+      stateFrames: this.stateFrames,
+      attackType: this.currentAttackType,
+      activeClip: this.activeClipName,
+      hitApplied: this.hitApplied,
+      position: {
+        x: this.position.x,
+        y: this.position.y,
+        z: this.position.z,
+      },
+      rotationY: this.group.rotation.y,
+      facingRight: this.facingRight,
+      stepping: this._stepping,
+      stepDirection: this._stepDirection,
+      stepFrames: this._stepFrames,
+      stepCooldown: this._stepCooldown,
+      actionable: this.fsm.isActionable,
+      attacking: this.fsm.isAttacking,
+      sidestepPhase: this.fsm.sidestepPhase,
+      dead: this.damageSystem.isDead(),
+      tipSpeed: this._tipVelocity.length(),
+      baseSpeed: this._baseVelocity.length(),
+      tipRelativeToward,
+      tipRelativeForward: this.getTipRelativeForwardSpeed(),
+      tipRelativeSpeed: this.getTipRelativeSpeed(),
+      weaponBase: {
+        x: weaponBase.x,
+        y: weaponBase.y,
+        z: weaponBase.z,
+      },
+      weaponTip: {
+        x: weaponTip.x,
+        y: weaponTip.y,
+        z: weaponTip.z,
+      },
+      bodyCollision: {
+        x: bodyCollision.x,
+        y: bodyCollision.y,
+        z: bodyCollision.z,
+      },
+      hurtCenter: {
+        x: hurtCenter.x,
+        y: hurtCenter.y,
+        z: hurtCenter.z,
+      },
+      hurtRadius: this._debugCollision?.hitRadius ?? 0.5,
+      bodyRadius,
+      collision: this._debugCollision ? { ...this._debugCollision } : null,
+    };
+  }
+
   startRagdoll(dirX, dirZ) {
-    // Snapshot current bone rotations BEFORE stopping animations
     const bones = [];
     this.root.traverse((child) => {
       if (child.isBone) {
@@ -690,15 +643,13 @@ export class Fighter {
       }
     });
 
-    // Stop animations, then restore the snapshot so we don't snap to T-pose
-    if (this.useClips && this.mixer) {
+    if (this.mixer) {
       this.mixer.stopAllAction();
     }
     for (const b of bones) {
       b.bone.rotation.copy(b.startRot);
     }
 
-    // Small stumble backward, no big launch
     this._ragdoll = {
       velX: dirX * 0.8,
       velY: 0,
@@ -715,38 +666,30 @@ export class Fighter {
 
   _updateRagdoll(dt) {
     const r = this._ragdoll;
-    // Use real time so ragdoll isn't frozen during slowmo
     const now = performance.now() / 1000;
     const realDt = r.lastTime ? Math.min(now - r.lastTime, 0.05) : dt;
     r.lastTime = now;
     r.time += realDt;
 
-    // Stumble slide
     this.position.x += r.velX * realDt;
     this.position.z += r.velZ * realDt;
     r.velX *= (1 - 3 * realDt);
     r.velZ *= (1 - 3 * realDt);
 
-    // Gradually tilt the root to collapse
     r.rootProgress = Math.min(r.rootProgress + realDt * 0.8, 1);
     const ease = r.rootProgress * r.rootProgress;
     this.root.rotation.x = r.rootStartX + (r.rootTargetX - r.rootStartX) * ease;
     this.root.rotation.z = r.rootStartZ + (r.rootTargetZ - r.rootStartZ) * ease;
 
-    // Compensate Y based on tilt direction
-    // Forward fall (positive X rot) pushes body down — needs lift
-    // Backward fall (negative X rot) raises body — needs none
     const forwardTilt = Math.max(0, this.root.rotation.x) * 0.4;
     const backwardTilt = Math.max(0, -this.root.rotation.x) * 0.2;
     const sideTilt = Math.abs(this.root.rotation.z) * 0.15;
     this.position.y = Math.max(0, forwardTilt + backwardTilt + sideTilt);
 
-    // Bones go limp — limbs flop more
     for (const b of r.bones) {
       b.bone.rotation.x += b.velX * realDt;
       b.bone.rotation.y += b.velY * realDt;
       b.bone.rotation.z += b.velZ * realDt;
-      // Limbs get gravity pull
       if (b.isLimb) {
         b.velX += (Math.random() - 0.5) * 2 * realDt;
         b.velZ += (Math.random() - 0.5) * 2 * realDt;
@@ -762,7 +705,6 @@ export class Fighter {
     this.group.rotation.y = xPos < 0 ? Math.PI / 2 : -Math.PI / 2;
     this.fsm.reset();
     this.damageSystem.reset();
-    this.animator.reset();
     this.trail.stop();
     this.walkPhase = 0;
     this._ragdoll = null;
@@ -770,7 +712,7 @@ export class Fighter {
     this.root.rotation.z = 0;
     this.position.y = 0;
 
-    if (this.useClips && this.mixer) {
+    if (this.mixer) {
       this.mixer.stopAllAction();
       this.activeClipName = null;
       const idleAction = this.clipActions['idle'];
@@ -784,14 +726,11 @@ export class Fighter {
       }
     }
 
-    if (this.useFBX) {
-      this._fbxBobY = 0;
-      this._fbxBaseY = null;
-      if (this._fbxBaseScale != null) {
-        this.root.scale.setScalar(this._fbxBaseScale);
-      }
-      this._fbxBaseScale = null;
-    }
+    this._tipMotionInitialized = false;
+    this._tipVelocity.set(0, 0, 0);
+    this._baseVelocity.set(0, 0, 0);
+    this._debugCollision = null;
+    this._updateTipMotion();
   }
 
   addToScene(scene) {

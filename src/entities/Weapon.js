@@ -57,12 +57,12 @@ export class Weapon {
       // Blade
       const bladeLength = s.length - 0.15;
       let bladeGeo;
-      if (this.type === WeaponType.DAO) {
+      if (this.type === WeaponType.KATANA) {
         // Curved blade approximation - slightly wider, tapered
         bladeGeo = new THREE.BoxGeometry(s.width, bladeLength, 0.005);
         bladeGeo.translate(0, 0.16 + bladeLength / 2, 0);
       } else {
-        // Jian - straight double-edged
+        // Straight sword / generic blade
         bladeGeo = new THREE.BoxGeometry(s.width, bladeLength, 0.004);
         bladeGeo.translate(0, 0.16 + bladeLength / 2, 0);
       }

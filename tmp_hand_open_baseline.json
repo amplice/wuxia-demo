@@ -1,0 +1,2201 @@
+{
+  "scene": "Scene",
+  "frame": 0,
+  "armature": "Character_All",
+  "wrist_bones": {
+    "left": "left_wrist",
+    "right": "right_wrist"
+  },
+  "bones": {
+    "left_index1": {
+      "parent": "left_wrist",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.002297
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.059412
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.013936
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "left_index2": {
+      "parent": "left_index1",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.002346
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.079602
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.014394
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "left_index3": {
+      "parent": "left_index2",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.002309
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.095418
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.015191
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "left_middle1": {
+      "parent": "left_wrist",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          0.000388
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.059091
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.000933
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "left_middle2": {
+      "parent": "left_middle1",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          0.000311
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.080858
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.001714
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "left_middle3": {
+      "parent": "left_middle2",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        -0.0,
+        0.0,
+        -0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          1e-06
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.097416
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.001727
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "left_pinky1": {
+      "parent": "left_wrist",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        -0.0,
+        0.0,
+        -0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.000342
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.052197
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.028933
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "left_pinky2": {
+      "parent": "left_pinky1",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        0.0,
+        -0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.001569
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.068404
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.031474
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "left_pinky3": {
+      "parent": "left_pinky2",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.002715
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.07997
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.033432
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "left_ring1": {
+      "parent": "left_wrist",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        -0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          0.000452
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.057277
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.015311
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "left_ring2": {
+      "parent": "left_ring1",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -8.7e-05
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.076636
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.017063
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "left_ring3": {
+      "parent": "left_ring2",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        0.0,
+        -0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.000907
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.091001
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.018353
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "left_thumb1": {
+      "parent": "left_wrist",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        -0.0,
+        0.0,
+        -0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.006773
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.024765
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.015628
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "left_thumb2": {
+      "parent": "left_thumb1",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.010443
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.040496
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.023718
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "left_thumb3": {
+      "parent": "left_thumb2",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          -0.0,
+          -0.01176
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.056579
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.027729
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "right_index1": {
+      "parent": "right_wrist",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        -0.0,
+        -0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          -0.0
+        ],
+        [
+          -0.0,
+          0.0,
+          1.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          -0.00084
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.060857
+        ],
+        [
+          -0.0,
+          0.0,
+          1.0,
+          0.011263
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "right_index2": {
+      "parent": "right_index1",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        0.0,
+        -0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          -0.000237
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.080063
+        ],
+        [
+          -0.0,
+          0.0,
+          1.0,
+          0.011092
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "right_index3": {
+      "parent": "right_index2",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        0.0,
+        -0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.00041
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.096139
+        ],
+        [
+          -0.0,
+          0.0,
+          1.0,
+          0.011325
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "right_middle1": {
+      "parent": "right_wrist",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.001649
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.058327
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.002734
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "right_middle2": {
+      "parent": "right_middle1",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        -0.0,
+        0.0,
+        -0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.002518
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.078972
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.004787
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "right_middle3": {
+      "parent": "right_middle2",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.003007
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.095826
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.005598
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "right_pinky1": {
+      "parent": "right_wrist",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.001614
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.048597
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.029342
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "right_pinky2": {
+      "parent": "right_pinky1",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        -0.0,
+        -0.0,
+        -0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.001897
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.064613
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.03391
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "right_pinky3": {
+      "parent": "right_pinky2",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.001961
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.076784
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.037294
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "right_ring1": {
+      "parent": "right_wrist",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.002121
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.054973
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.016139
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "right_ring2": {
+      "parent": "right_ring1",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        -0.0,
+        -0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.002678
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.073836
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.019852
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "right_ring3": {
+      "parent": "right_ring2",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.002963
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.088736
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.022044
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "right_thumb1": {
+      "parent": "right_wrist",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          -0.006308
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.024942
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.013867
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "right_thumb2": {
+      "parent": "right_thumb1",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          -0.009396
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.041333
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.020144
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "right_thumb3": {
+      "parent": "right_thumb2",
+      "rotation_mode": "QUATERNION",
+      "basis_location": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "basis_rotation_quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "basis_rotation_euler": null,
+      "basis_scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matrix_basis": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "matrix_relative_to_wrist": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          -0.010641
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.058082
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.023301
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    }
+  }
+}

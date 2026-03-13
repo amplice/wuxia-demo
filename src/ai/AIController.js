@@ -1,5 +1,5 @@
 import { AI_PRESETS } from './AIPersonality.js';
-import { FighterState, AttackType, WALK_SPEED } from '../core/Constants.js';
+import { FighterState, AttackType } from '../core/Constants.js';
 
 const MAX_BLOCK_FRAMES = 40; // ~0.67s max block hold
 
@@ -11,6 +11,12 @@ export class AIController {
     this.currentAction = null;
     this.sideDir = 1;
     this.blockHeldFrames = 0;
+
+    // Opponent tracking
+    this._opponentLastState = null;
+    this._opponentBlockCount = 0;    // how often opponent blocks (informs heavy usage)
+    this._opponentAttackCount = 0;   // how often opponent attacks
+    this._decayTimer = 0;
   }
 
   setDifficulty(difficulty) {
@@ -20,11 +26,13 @@ export class AIController {
   update(fighter, opponent, frameCount, dt) {
     this._opponent = opponent;
 
+    // Track opponent behavior patterns
+    this._trackOpponent(opponent);
+
     // Track block duration and force release when too long
     if (this.currentAction === 'block') {
       this.blockHeldFrames++;
       if (this.blockHeldFrames >= MAX_BLOCK_FRAMES) {
-        // Force release block
         if (fighter.state === FighterState.BLOCK) {
           fighter.fsm.transition(FighterState.IDLE);
         }
@@ -35,7 +43,7 @@ export class AIController {
       this.blockHeldFrames = 0;
     }
 
-    // Release block between decisions if opponent isn't attacking anymore
+    // Release block if opponent is no longer threatening
     if (this.currentAction === 'block' && fighter.state === FighterState.BLOCK) {
       const opponentThreat = opponent.state === FighterState.ATTACK_STARTUP ||
                               opponent.state === FighterState.ATTACK_ACTIVE;
@@ -45,17 +53,65 @@ export class AIController {
       }
     }
 
-    if (frameCount - this.lastDecisionFrame < this.personality.reactionFrames) {
+    // === REACTIVE INTERRUPTS ===
+    // Break decision cooldown for high-priority situations
+    const shouldInterrupt = this._checkReactiveInterrupt(fighter, opponent);
+
+    if (shouldInterrupt) {
+      this.lastDecisionFrame = frameCount;
+      this._makeDecision(fighter, opponent, dt);
+    } else if (frameCount - this.lastDecisionFrame < this.personality.reactionFrames) {
       this._executePersistent(fighter, dt);
-      return;
+    } else {
+      this.lastDecisionFrame = frameCount;
+      this._makeDecision(fighter, opponent, dt);
     }
 
-    this.lastDecisionFrame = frameCount;
-    this._makeDecision(fighter, opponent, dt);
+    this._applyMovement(fighter, dt);
+  }
+
+  _trackOpponent(opponent) {
+    const state = opponent.state;
+    if (state !== this._opponentLastState) {
+      if (state === FighterState.BLOCK || state === FighterState.BLOCK_STUN) {
+        this._opponentBlockCount++;
+      }
+      if (state === FighterState.ATTACK_STARTUP || state === FighterState.ATTACK_ACTIVE) {
+        this._opponentAttackCount++;
+      }
+      this._opponentLastState = state;
+    }
+
+    // Decay counters over time so AI adapts to changing behavior
+    this._decayTimer++;
+    if (this._decayTimer > 300) { // every ~5 seconds
+      this._opponentBlockCount = Math.floor(this._opponentBlockCount * 0.7);
+      this._opponentAttackCount = Math.floor(this._opponentAttackCount * 0.7);
+      this._decayTimer = 0;
+    }
+  }
+
+  _checkReactiveInterrupt(fighter, opponent) {
+    if (!fighter.fsm.isActionable) return false;
+
+    const p = this.personality;
+
+    // React to opponent starting an attack (defensive interrupt)
+    if (opponent.state === FighterState.ATTACK_STARTUP && this._opponentLastState !== FighterState.ATTACK_STARTUP) {
+      // Higher skill = more likely to react immediately
+      return Math.random() < (p.parryRate + p.dodgeRate) * 0.5;
+    }
+
+    // React to parry success (counter-attack window)
+    if (fighter.state === FighterState.PARRY_SUCCESS) {
+      return Math.random() < p.counterRate;
+    }
+
+    return false;
   }
 
   _makeDecision(fighter, opponent, dt) {
-    // Allow re-evaluation even while blocking
+    // Allow re-evaluation while blocking
     if (fighter.state === FighterState.BLOCK) {
       fighter.fsm.transition(FighterState.IDLE);
       this.currentAction = null;
@@ -74,47 +130,87 @@ export class AIController {
 
     const scores = {};
 
-    // Spear/staff fighters engage at longer range
-    const hasLongWeapon = fighter.weaponType === 'spear' || fighter.weaponType === 'staff';
-    const inRange = dist < (hasLongWeapon ? 3.5 : 2.5);
-    const closeRange = dist < (hasLongWeapon ? 2.5 : 1.8);
+    const ranges = fighter.charDef?.aiRanges || { engage: 2.5, close: 1.8 };
+    const inRange = dist < ranges.engage;
+    const closeRange = dist < ranges.close;
 
-    // Attack scoring
+    // Opponent state analysis
+    const opponentAttacking = opponent.state === FighterState.ATTACK_STARTUP ||
+                               opponent.state === FighterState.ATTACK_ACTIVE;
+    const opponentRecovering = opponent.state === FighterState.ATTACK_RECOVERY;
+    const opponentStunned = opponent.state === FighterState.HIT_STUN ||
+                             opponent.state === FighterState.PARRIED_STUN ||
+                             opponent.state === FighterState.BLOCK_STUN ||
+                             opponent.state === FighterState.CLASH;
+    const opponentVulnerable = opponentRecovering || opponentStunned;
+
+    // === COUNTER-ATTACK after parry success ===
+    if (fighter.state === FighterState.PARRY_SUCCESS) {
+      if (Math.random() < p.counterRate) {
+        scores.quickAttack = 2.0; // very high priority
+        scores.thrustAttack = 1.5;
+      }
+    }
+
+    // === PUNISH recovery/stun windows ===
+    if (opponentVulnerable && inRange) {
+      if (Math.random() < p.punishRate) {
+        scores.quickAttack = (scores.quickAttack || 0) + 1.5 + noise();
+        scores.thrustAttack = (scores.thrustAttack || 0) + 1.0 + noise();
+      }
+    }
+
+    // === PUNISH with approach when opponent is recovering out of range ===
+    if (opponentVulnerable && !inRange && dist < ranges.engage + 1.5) {
+      if (Math.random() < p.punishRate) {
+        scores.moveForward = (scores.moveForward || 0) + 1.2;
+      }
+    }
+
+    // === Normal attack scoring ===
     if (inRange) {
-      scores.quickAttack = 0.4 + p.aggression * 0.3 + noise();
-      scores.heavyAttack = 0.15 + p.aggression * 0.2 + noise();
-      scores.thrustAttack = 0.2 + p.aggression * 0.2 + noise();
+      scores.quickAttack = (scores.quickAttack || 0) + 0.4 + p.aggression * 0.3 + noise();
+      scores.thrustAttack = (scores.thrustAttack || 0) + 0.2 + p.aggression * 0.2 + noise();
+
+      // Heavy attack scoring — influenced by opponent's blocking tendency
+      const blockRatio = this._getOpponentBlockRatio();
+      const heavyBonus = blockRatio * p.heavyMixup; // more heavy attacks vs frequent blockers
+      scores.heavyAttack = (scores.heavyAttack || 0) + 0.15 + p.aggression * 0.2 + heavyBonus + noise();
+
       if (closeRange) {
         scores.quickAttack += 0.2;
       }
     }
 
-    // Defense scoring
-    const opponentAttacking = opponent.state === FighterState.ATTACK_STARTUP ||
-                               opponent.state === FighterState.ATTACK_ACTIVE;
+    // === Defense scoring ===
     if (opponentAttacking) {
       scores.block = 0.5 + noise();
       scores.parry = p.parryRate + noise();
-      scores.sidestep = 0.3 + noise();
+
+      // Sidestep — use dodgeRate
+      scores.sidestep = 0.3 + p.dodgeRate * 0.5 + noise();
+
       // Only backstep if not near edge
       if (!nearEdge) {
-        scores.backstep = 0.2 + noise();
+        scores.backstep = 0.15 + p.dodgeRate * 0.3 + noise();
       }
     }
 
-    // Sidestep — good defensive option, lateral so safe near edge
-    if (opponentAttacking) {
-      scores.sidestep = (scores.sidestep || 0) + 0.4 + noise();
-    }
+    // Random sidestep for repositioning
     scores.sidestep = (scores.sidestep || 0) + 0.05 + noise();
 
-    // Movement — prefer staying at fighting distance, not retreating
+    // === Movement / spacing ===
     if (!inRange) {
-      scores.moveForward = 0.6 + p.aggression * 0.3 + noise();
+      scores.moveForward = (scores.moveForward || 0) + 0.6 + p.aggression * 0.3 + noise();
     }
-    // Only retreat at close range if far from edge
-    if (closeRange && !nearEdge) {
-      scores.moveBack = 0.1 + noise();
+
+    // Spacing awareness: back off at close range to maintain fighting distance
+    if (closeRange && !nearEdge && !opponentVulnerable) {
+      const backoffDesire = p.spacingAwareness * 0.4;
+      scores.moveBack = (scores.moveBack || 0) + backoffDesire + noise();
+      scores.sidestep = (scores.sidestep || 0) + backoffDesire * 0.5 + noise();
+    } else if (closeRange && !nearEdge) {
+      scores.moveBack = (scores.moveBack || 0) + 0.1 + noise();
     }
 
     // Center pull: the further from center, the more AI wants to move forward
@@ -144,16 +240,21 @@ export class AIController {
     this._executePending(fighter, dt);
   }
 
+  _getOpponentBlockRatio() {
+    const total = this._opponentBlockCount + this._opponentAttackCount;
+    if (total < 3) return 0.3; // not enough data, assume moderate blocking
+    return this._opponentBlockCount / total;
+  }
+
   _executePersistent(fighter, dt) {
     if (!this.currentAction || !fighter.fsm.isActionable) return;
 
     switch (this.currentAction) {
-      case 'moveForward': this._aiMoveToward(fighter, dt); break;
-      case 'moveBack': this._aiMoveAway(fighter, dt); break;
       case 'block':
         if (fighter.fsm.isActionable) fighter.block();
         break;
-      default: fighter.stopMoving(); break;
+      default:
+        break;
     }
   }
 
@@ -199,41 +300,38 @@ export class AIController {
         this.currentAction = null;
         break;
       case 'moveForward':
-        this._aiMoveToward(fighter, dt);
         break;
       case 'moveBack':
-        this._aiMoveAway(fighter, dt);
         break;
       case 'idle':
       default:
-        fighter.stopMoving();
         this.currentAction = null;
         break;
     }
   }
 
-  _aiMoveToward(fighter, dt) {
-    if (!fighter.fsm.isActionable) return;
-    const dx = this._opponent.position.x - fighter.position.x;
-    const dz = this._opponent.position.z - fighter.position.z;
-    const dist = Math.sqrt(dx * dx + dz * dz) || 0.01;
-    fighter.position.x += (dx / dist) * WALK_SPEED * dt;
-    fighter.position.z += (dz / dist) * WALK_SPEED * dt;
-    if (fighter.fsm.state === FighterState.IDLE || fighter.fsm.state === FighterState.PARRY_SUCCESS) {
-      fighter.fsm.transition(FighterState.WALK_FORWARD);
-    }
+  _applyMovement(fighter, dt) {
+    const direction = this.currentAction === 'moveForward'
+      ? 1
+      : (this.currentAction === 'moveBack' ? -1 : 0);
+    fighter.applyMovementInput(direction, this._opponent, dt);
   }
 
-  _aiMoveAway(fighter, dt) {
-    if (!fighter.fsm.isActionable) return;
-    const dx = this._opponent.position.x - fighter.position.x;
-    const dz = this._opponent.position.z - fighter.position.z;
-    const dist = Math.sqrt(dx * dx + dz * dz) || 0.01;
-    fighter.position.x -= (dx / dist) * WALK_SPEED * dt;
-    fighter.position.z -= (dz / dist) * WALK_SPEED * dt;
-    if (fighter.fsm.state === FighterState.IDLE || fighter.fsm.state === FighterState.PARRY_SUCCESS) {
-      fighter.fsm.transition(FighterState.WALK_BACK);
-    }
+  getDebugSnapshot() {
+    return {
+      currentAction: this.currentAction,
+      pendingAction: this.pendingAction,
+      reactionFrames: this.personality.reactionFrames,
+      decisionNoise: this.personality.decisionNoise,
+      aggression: this.personality.aggression,
+      parryRate: this.personality.parryRate,
+      counterRate: this.personality.counterRate,
+      punishRate: this.personality.punishRate,
+      blockHeldFrames: this.blockHeldFrames,
+      sideDir: this.sideDir,
+      opponentBlockCount: this._opponentBlockCount,
+      opponentAttackCount: this._opponentAttackCount,
+    };
   }
 
   reset() {
@@ -241,5 +339,9 @@ export class AIController {
     this.pendingAction = null;
     this.currentAction = null;
     this.blockHeldFrames = 0;
+    this._opponentLastState = null;
+    this._opponentBlockCount = 0;
+    this._opponentAttackCount = 0;
+    this._decayTimer = 0;
   }
 }

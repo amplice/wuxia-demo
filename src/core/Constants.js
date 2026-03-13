@@ -50,8 +50,7 @@ export const HitResult = {
 
 // Weapon types
 export const WeaponType = {
-  JIAN: 'jian',
-  DAO: 'dao',
+  KATANA: 'katana',
   STAFF: 'staff',
   SPEAR: 'spear',
 };
@@ -60,10 +59,16 @@ export const WeaponType = {
 export const FRAME_DURATION = 1 / 60;
 
 export const PARRY_WINDOW_FRAMES = 5;
-export const BLOCK_STUN_FRAMES = 12;
-export const HIT_STUN_FRAMES = 25;
-export const PARRIED_STUN_FRAMES = 20;
-export const CLASH_PUSHBACK_FRAMES = 15;
+export const BLOCK_STUN_FRAMES = 16;
+export const HIT_STUN_FRAMES = 16;
+export const PARRIED_STUN_FRAMES = 24;
+export const CLASH_PUSHBACK_FRAMES = 16;
+
+// Knockback slide speed (units/sec) — fighters slide apart during stun
+export const KNOCKBACK_SLIDE_SPEED = 1.88;
+
+// Heavy attack advantage multiplier (clash & block vs heavy)
+export const HEAVY_ADVANTAGE_MULT = 1.5;
 
 
 // Sidestep
@@ -72,7 +77,7 @@ export const SIDESTEP_DASH_DISTANCE = 1.4;
 export const SIDESTEP_RECOVERY_FRAMES = 8;
 
 // Backstep
-export const BACKSTEP_FRAMES = 10;
+export const BACKSTEP_FRAMES = 21;
 export const BACKSTEP_DISTANCE = 1.5;
 export const BACKSTEP_INVULN_FRAMES = 6;
 
@@ -99,3 +104,11 @@ export const ROUND_END_DELAY = 1.5;
 // Input buffer
 export const INPUT_BUFFER_SIZE = 8;
 export const INPUT_BUFFER_WINDOW = 6;
+
+// Debug
+export const DEBUG_OPTIONS = {
+  overlayEnabled: false,
+  persistToggle: true,
+  toggleKey: 'F3',
+  storageKey: 'wuxia-warrior-debug-overlay',
+};

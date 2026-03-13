@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { lerp, clamp } from '../utils/MathUtils.js';
 
+const _bodyA = new THREE.Vector3();
+const _bodyB = new THREE.Vector3();
+
 export class CameraController {
   constructor() {
     this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -43,18 +46,25 @@ export class CameraController {
 
     if (!fighter1 || !fighter2) return;
 
+    fighter1.getBodyCollisionPosition(_bodyA);
+    fighter2.getBodyCollisionPosition(_bodyB);
+
     // Midpoint between fighters
-    const midX = (fighter1.position.x + fighter2.position.x) / 2;
+    const midX = (_bodyA.x + _bodyB.x) / 2;
     const midY = (fighter1.position.y + fighter2.position.y) / 2 + 1.0;
-    const midZ = (fighter1.position.z + fighter2.position.z) / 2;
+    const midZ = (_bodyA.z + _bodyB.z) / 2;
 
     // Distance-based zoom
     const dist = fighter1.distanceTo(fighter2);
     const zoomDist = clamp(5 + dist * 0.8, 5, 14);
 
     // Compute the angle of the line between fighters
-    const dx = fighter2.position.x - fighter1.position.x;
-    const dz = fighter2.position.z - fighter1.position.z;
+    let dx = _bodyB.x - _bodyA.x;
+    let dz = _bodyB.z - _bodyA.z;
+    if ((dx * dx + dz * dz) < 1e-6) {
+      dx = fighter1.playerIndex < fighter2.playerIndex ? 1 : -1;
+      dz = 0;
+    }
     const fighterLineAngle = Math.atan2(dz, dx);
     const targetOrbit = fighterLineAngle + Math.PI / 2;
 

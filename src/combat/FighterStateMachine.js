@@ -84,24 +84,24 @@ export class FighterStateMachine {
     return true;
   }
 
-  applyBlockStun() {
-    this.transition(FighterState.BLOCK_STUN, BLOCK_STUN_FRAMES);
+  applyBlockStun(frames) {
+    this.transition(FighterState.BLOCK_STUN, frames || BLOCK_STUN_FRAMES);
   }
 
-  applyHitStun() {
-    this.transition(FighterState.HIT_STUN, HIT_STUN_FRAMES);
+  applyHitStun(frames) {
+    this.transition(FighterState.HIT_STUN, frames || HIT_STUN_FRAMES);
   }
 
-  applyParriedStun() {
-    this.transition(FighterState.PARRIED_STUN, PARRIED_STUN_FRAMES);
+  applyParriedStun(frames) {
+    this.transition(FighterState.PARRIED_STUN, frames || PARRIED_STUN_FRAMES);
   }
 
-  applyParrySuccess() {
-    this.transition(FighterState.PARRY_SUCCESS, PARRIED_STUN_FRAMES);
+  applyParrySuccess(frames) {
+    this.transition(FighterState.PARRY_SUCCESS, frames || PARRIED_STUN_FRAMES);
   }
 
-  applyClash() {
-    this.transition(FighterState.CLASH, CLASH_PUSHBACK_FRAMES);
+  applyClash(frames) {
+    this.transition(FighterState.CLASH, frames || CLASH_PUSHBACK_FRAMES);
   }
 
   startDying() {
@@ -155,6 +155,7 @@ export class FighterStateMachine {
       case FighterState.PARRIED_STUN:
       case FighterState.CLASH:
         if (this.stateFrames >= this.stateDuration) {
+          this.fighter.knockbackMult = 1;
           this.transition(FighterState.IDLE);
         }
         break;
