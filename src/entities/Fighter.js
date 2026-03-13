@@ -43,6 +43,12 @@ export class Fighter {
     if (charDef.rootRotationY) {
       root.rotation.y = charDef.rootRotationY;
     }
+    if (charDef.modelRotationX) {
+      root.rotation.x += charDef.modelRotationX;
+    }
+    if (charDef.modelYOffset) {
+      root.position.y += charDef.modelYOffset;
+    }
 
     this.root = root;
     this.joints = joints;
@@ -710,7 +716,7 @@ export class Fighter {
     this.trail.stop();
     this.walkPhase = 0;
     this._ragdoll = null;
-    this.root.rotation.x = 0;
+    this.root.rotation.x = this.charDef.modelRotationX ?? 0;
     this.root.rotation.z = 0;
     this.position.y = 0;
 

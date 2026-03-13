@@ -5,6 +5,8 @@ export const CHARACTER_DEFS = {
     displayName: 'Spearman',
     glbPath: '/spearman.glb',
     weaponType: WeaponType.SPEAR,
+    modelYOffset: -0.02,
+    modelRotationX: -0.02,
     walkSpeedMult: 0.5,
     clipSpeedups: {
       walk: ['walk_forward', 'walk_backward'],
@@ -24,6 +26,8 @@ export const CHARACTER_DEFS = {
     displayName: 'Ronin',
     glbPath: '/ronin.glb',
     weaponType: WeaponType.KATANA,
+    modelYOffset: -0.15,
+    modelRotationX: -0.05,
     walkSpeedMult: 0.5,
     clipSpeedups: {
       walk: ['walk_forward', 'walk_backward'],

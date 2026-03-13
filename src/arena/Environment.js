@@ -25,6 +25,8 @@ export class Environment {
     dir.shadow.camera.right = 12;
     dir.shadow.camera.top = 12;
     dir.shadow.camera.bottom = -12;
+    dir.shadow.bias = -0.00035;
+    dir.shadow.normalBias = 0.008;
     this.scene.add(dir);
 
     // Rim light (from behind)
