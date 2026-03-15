@@ -9,7 +9,7 @@ const HURT_RADIUS = 0.5;
 const HURT_HEIGHT = 1.8;
 const TIP_TOWARD_TARGET_THRESHOLD = 0.001;
 const TIP_RELATIVE_SPEED_THRESHOLD = 0.002;
-const WEAPON_CLASH_DISTANCE = 0.16;
+const WEAPON_CLASH_MOTION_THRESHOLD = 0.0025;
 
 const _defenderCenter = new THREE.Vector3();
 const _lineDir = new THREE.Vector3();
@@ -25,6 +25,8 @@ const _segD2 = new THREE.Vector3();
 const _segR = new THREE.Vector3();
 const _segC1 = new THREE.Vector3();
 const _segC2 = new THREE.Vector3();
+const _aMid = new THREE.Vector3();
+const _bMid = new THREE.Vector3();
 
 export class HitResolver {
   resolve(attacker, defender) {
@@ -88,7 +90,32 @@ export class HitResolver {
     const aTip = attacker.getWeaponTipWorldPosition(_segQ1);
     const bBase = defender.getWeaponBaseWorldPosition(_segP2);
     const bTip = defender.getWeaponTipWorldPosition(_segQ2);
-    return this._distBetweenSegments(aBase, aTip, bBase, bTip) <= WEAPON_CLASH_DISTANCE;
+    _aMid.addVectors(aBase, aTip).multiplyScalar(0.5);
+    _bMid.addVectors(bBase, bTip).multiplyScalar(0.5);
+
+    const aRadius = attacker.charDef?.weaponClashRadius ?? 0.09;
+    const bRadius = defender.charDef?.weaponClashRadius ?? 0.09;
+    const dist = this._distBetweenSegments(aBase, aTip, bBase, bTip);
+    const overlap = dist <= (aRadius + bRadius);
+    const closingDrive =
+      attacker.getTipRelativeVelocityToward(_bMid) +
+      defender.getTipRelativeVelocityToward(_aMid);
+    const motionGatePassed = closingDrive > WEAPON_CLASH_MOTION_THRESHOLD;
+
+    const aCollision = attacker._debugCollision || (attacker._debugCollision = {});
+    const bCollision = defender._debugCollision || (defender._debugCollision = {});
+    aCollision.weaponClashRadius = aRadius;
+    bCollision.weaponClashRadius = bRadius;
+    aCollision.weaponClashDistance = dist;
+    bCollision.weaponClashDistance = dist;
+    aCollision.weaponClashOverlap = overlap;
+    bCollision.weaponClashOverlap = overlap;
+    aCollision.weaponClashClosingDrive = closingDrive;
+    bCollision.weaponClashClosingDrive = closingDrive;
+    aCollision.weaponClashMotionGate = motionGatePassed;
+    bCollision.weaponClashMotionGate = motionGatePassed;
+
+    return overlap && motionGatePassed;
   }
 
   checkSwordCollision(attacker, defender) {

@@ -20,6 +20,10 @@ export class ModelLoader {
     'speartip', 'katanatip', 'swordtip', 'bladetip', 'weapontip', 'tip',
   ];
 
+  static WEAPON_BASE_BONE_NAMES = [
+    'spearcontrol', 'katanacontrol', 'weaponcontrol', 'bladecontrol', 'swordcontrol',
+  ];
+
   static BODY_ANCHOR_BONE_NAMES = [
     'spine1', 'mixamorig_spine1',
     'spine', 'mixamorig_spine',
@@ -459,6 +463,9 @@ export class ModelLoader {
           joints.weaponTip = child;
         } else if (!joints.weaponTip && n.endsWith('tip')) {
           joints.weaponTip = child;
+        }
+        if (!joints.weaponBase && ModelLoader.WEAPON_BASE_BONE_NAMES.includes(n)) {
+          joints.weaponBase = child;
         }
         if (!joints.spearTip && n === 'speartip') {
           joints.spearTip = child;

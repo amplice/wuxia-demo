@@ -31,6 +31,7 @@ export const CHARACTER_DEFS = {
     bakeWeapon: true,
     aiRanges: { engage: 3.5, close: 2.5 },
     bodySeparation: 1.6,
+    weaponClashRadius: 0.09,
   },
   ronin: {
     displayName: 'Ronin',
@@ -60,6 +61,7 @@ export const CHARACTER_DEFS = {
     aiRanges: { engage: 2.8, close: 1.8 },
     sidestepDistance: 1.2,
     bodySeparation: 1.6,
+    weaponClashRadius: 0.09,
   },
 };
 

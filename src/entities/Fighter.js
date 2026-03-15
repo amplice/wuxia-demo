@@ -233,6 +233,10 @@ export class Fighter {
 
   getWeaponBaseWorldPosition(target = new THREE.Vector3()) {
     this._syncWorldMatrices();
+    const weaponBaseJoint = this.joints.weaponBase;
+    if (weaponBaseJoint) {
+      return weaponBaseJoint.getWorldPosition(target);
+    }
     const handJoint = this.joints.handR || this.joints.handL;
     if (handJoint) {
       return handJoint.getWorldPosition(target);
@@ -644,6 +648,7 @@ export class Fighter {
         y: hurtCenter.y,
         z: hurtCenter.z,
       },
+      weaponClashRadius: this.charDef.weaponClashRadius ?? 0.09,
       hurtRadius: this._debugCollision?.hurtRadius ?? 0.5,
       hurtHeight: this._debugCollision?.hurtHeight ?? 1.8,
       bodyRadius,

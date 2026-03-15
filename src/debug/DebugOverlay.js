@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { DEBUG_OPTIONS } from '../core/Constants.js';
 
+const _segMid = new THREE.Vector3();
+const _segDir = new THREE.Vector3();
+const _segQuat = new THREE.Quaternion();
+const _worldUp = new THREE.Vector3(0, 1, 0);
+
 export class DebugOverlay {
   constructor(scene = null) {
     this.enabled = this._loadInitialState();
@@ -109,6 +114,9 @@ export class DebugOverlay {
       lines.push(`  collision dist=${fighter.collision.distance.toFixed(4)} hurtRadius=${fighter.collision.hurtRadius.toFixed(3)} hurtHeight=${fighter.collision.hurtHeight.toFixed(3)} defender=${fighter.collision.defenderState ?? '-'}`);
       lines.push(`  collision motionGate=${fighter.collision.motionGatePassed} forward=${fighter.collision.forwardDrive.toFixed(4)} toward=${fighter.collision.towardTarget.toFixed(4)} segmentHit=${fighter.collision.segmentHit}`);
       lines.push(`  collision resolve=${fighter.collision.lastResolve ?? '-'} result=${fighter.collision.lastCheckResult ?? '-'}`);
+      if (Number.isFinite(fighter.collision.weaponClashDistance)) {
+        lines.push(`  clash dist=${fighter.collision.weaponClashDistance.toFixed(4)} radius=${fighter.weaponClashRadius.toFixed(3)} overlap=${fighter.collision.weaponClashOverlap} motion=${fighter.collision.weaponClashMotionGate} closing=${fighter.collision.weaponClashClosingDrive.toFixed(4)}`);
+      }
     }
     return lines.join('\n');
   }
@@ -200,7 +208,31 @@ export class DebugOverlay {
     group.add(base);
     group.add(tip);
 
-    return { group, hurt, body, weaponLine, base, tip };
+    const clashCylinder = new THREE.Mesh(
+      new THREE.CylinderGeometry(1, 1, 1, 12, 1, true),
+      new THREE.MeshBasicMaterial({
+        color: segmentColor,
+        transparent: true,
+        opacity: 0.16,
+        depthWrite: false,
+      }),
+    );
+    const clashCapA = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 12, 10),
+      new THREE.MeshBasicMaterial({
+        color: segmentColor,
+        transparent: true,
+        opacity: 0.12,
+        depthWrite: false,
+      }),
+    );
+    const clashCapB = clashCapA.clone();
+
+    group.add(clashCylinder);
+    group.add(clashCapA);
+    group.add(clashCapB);
+
+    return { group, hurt, body, weaponLine, base, tip, clashCylinder, clashCapA, clashCapB };
   }
 
   _updateSceneHelpers(data) {
@@ -245,5 +277,26 @@ export class DebugOverlay {
     helper.base.position.copy(base);
     helper.tip.position.copy(tip);
     helper.weaponLine.geometry.setFromPoints([base, tip]);
+
+    const radius = fighter.weaponClashRadius ?? 0.09;
+    _segMid.addVectors(base, tip).multiplyScalar(0.5);
+    _segDir.subVectors(tip, base);
+    const segLen = _segDir.length();
+
+    helper.clashCylinder.position.copy(_segMid);
+    helper.clashCapA.position.copy(base);
+    helper.clashCapB.position.copy(tip);
+    helper.clashCapA.scale.setScalar(radius);
+    helper.clashCapB.scale.setScalar(radius);
+
+    if (segLen > 1e-5) {
+      _segDir.normalize();
+      _segQuat.setFromUnitVectors(_worldUp, _segDir);
+      helper.clashCylinder.quaternion.copy(_segQuat);
+      helper.clashCylinder.scale.set(radius, segLen, radius);
+      helper.clashCylinder.visible = true;
+    } else {
+      helper.clashCylinder.visible = false;
+    }
   }
 }
