@@ -4,12 +4,13 @@ import {
   BACKSTEP_INVULN_FRAMES,
   WeaponType,
 } from '../core/Constants.js';
-
-const HURT_RADIUS = 0.5;
-const HURT_HEIGHT = 1.8;
-const TIP_TOWARD_TARGET_THRESHOLD = 0.001;
-const TIP_RELATIVE_SPEED_THRESHOLD = 0.002;
-const WEAPON_CLASH_MOTION_THRESHOLD = 0.0025;
+import {
+  HURT_CYLINDER,
+  MOTION_THRESHOLDS,
+  getDefaultWeaponClashRadius,
+  getDefaultWeaponHitRadius,
+  getMotionThresholds,
+} from './CombatTuning.js';
 
 const _defenderCenter = new THREE.Vector3();
 const _lineDir = new THREE.Vector3();
@@ -78,11 +79,44 @@ export class HitResolver {
     return fighter.state === FighterState.ATTACK_ACTIVE;
   }
 
+  _isWithinContactWindow(fighter) {
+    if (!fighter?.fsm?.isAttacking || !fighter.currentAttackData) return false;
+    const duration = Math.max(fighter.fsm.stateDuration || 0, 1);
+    const progress = fighter.stateFrames / duration;
+    const start = fighter.currentAttackData.contactStart ?? 0;
+    const end = fighter.currentAttackData.contactEnd ?? 1;
+    return progress >= start && progress <= end;
+  }
+
+  _getWeaponHitRadius(fighter) {
+    if (typeof fighter.charDef?.weaponHitRadius === 'number') {
+      return fighter.charDef.weaponHitRadius;
+    }
+    return getDefaultWeaponHitRadius(fighter.weaponType);
+  }
+
   checkWeaponOverlap(attacker, defender) {
     const tip = attacker.getWeaponTipWorldPosition(new THREE.Vector3());
     const base = attacker.getWeaponBaseWorldPosition(new THREE.Vector3());
     defender.getHurtCenterWorldPosition(_defenderCenter);
-    return this._distToVerticalCylinder(base, tip, _defenderCenter, HURT_RADIUS, HURT_HEIGHT) <= 0;
+    const hitRadius = this._getWeaponHitRadius(attacker);
+
+    if (attacker.weaponType === WeaponType.SPEAR) {
+      return this._pointToCylinderDistanceForCenter(
+        tip,
+        _defenderCenter,
+        HURT_CYLINDER.radius,
+        HURT_CYLINDER.height,
+      ) <= hitRadius;
+    }
+
+    return this._distToVerticalCylinder(
+      base,
+      tip,
+      _defenderCenter,
+      HURT_CYLINDER.radius,
+      HURT_CYLINDER.height,
+    ) <= hitRadius;
   }
 
   checkWeaponClash(attacker, defender) {
@@ -93,14 +127,14 @@ export class HitResolver {
     _aMid.addVectors(aBase, aTip).multiplyScalar(0.5);
     _bMid.addVectors(bBase, bTip).multiplyScalar(0.5);
 
-    const aRadius = attacker.charDef?.weaponClashRadius ?? 0.09;
-    const bRadius = defender.charDef?.weaponClashRadius ?? 0.09;
+    const aRadius = attacker.charDef?.weaponClashRadius ?? getDefaultWeaponClashRadius(attacker.weaponType);
+    const bRadius = defender.charDef?.weaponClashRadius ?? getDefaultWeaponClashRadius(defender.weaponType);
     const dist = this._distBetweenSegments(aBase, aTip, bBase, bTip);
     const overlap = dist <= (aRadius + bRadius);
     const closingDrive =
       attacker.getTipRelativeVelocityToward(_bMid) +
       defender.getTipRelativeVelocityToward(_aMid);
-    const motionGatePassed = closingDrive > WEAPON_CLASH_MOTION_THRESHOLD;
+    const motionGatePassed = closingDrive > MOTION_THRESHOLDS.weaponClashClosingDrive;
 
     const aCollision = attacker._debugCollision || (attacker._debugCollision = {});
     const bCollision = defender._debugCollision || (defender._debugCollision = {});
@@ -121,40 +155,96 @@ export class HitResolver {
   checkSwordCollision(attacker, defender) {
     const tip = attacker.getWeaponTipWorldPosition(new THREE.Vector3());
     const base = attacker.getWeaponBaseWorldPosition(new THREE.Vector3());
+    const hitRadius = this._getWeaponHitRadius(attacker);
 
     defender.getHurtCenterWorldPosition(_defenderCenter);
 
     const collision = attacker._debugCollision || (attacker._debugCollision = {});
     collision.distance = Infinity;
-    collision.hurtRadius = HURT_RADIUS;
-    collision.hurtHeight = HURT_HEIGHT;
+    collision.hurtRadius = HURT_CYLINDER.radius;
+    collision.hurtHeight = HURT_CYLINDER.height;
     collision.forwardDrive = 0;
     collision.towardTarget = 0;
     collision.motionGatePassed = false;
     collision.segmentHit = false;
+    collision.weaponHitRadius = hitRadius;
+    collision.weaponHitMode = attacker.weaponType === WeaponType.SPEAR ? 'tip' : 'capsule';
+    collision.contactT = 1;
+    collision.attackProgress = Math.max(attacker.fsm.stateDuration || 0, 1) > 0
+      ? attacker.stateFrames / Math.max(attacker.fsm.stateDuration || 0, 1)
+      : 0;
+    collision.contactWindowStart = attacker.currentAttackData?.contactStart ?? 0;
+    collision.contactWindowEnd = attacker.currentAttackData?.contactEnd ?? 1;
+    collision.contactWindowPassed = this._isWithinContactWindow(attacker);
     collision.lastCheckResult = 'pending';
     collision.defenderState = defender.state;
 
-    const towardTarget = attacker.getTipRelativeVelocityToward(_defenderCenter);
-    const relativeSpeed = attacker.getTipRelativeSpeed();
+    if (!collision.contactWindowPassed) {
+      collision.lastCheckResult = 'blocked_contact_window';
+      return false;
+    }
+
+    let towardTarget;
+    let relativeSpeed;
+
+    if (attacker.weaponType === WeaponType.SPEAR) {
+      towardTarget = attacker.getTipRelativeVelocityToward(_defenderCenter);
+      relativeSpeed = attacker.getTipRelativeSpeed();
+    } else {
+      const contactT = this._closestPointParamOnSegment(_defenderCenter, base, tip);
+      collision.contactT = contactT;
+      towardTarget = attacker.getWeaponPointVelocityToward(_defenderCenter, contactT, true);
+      relativeSpeed = attacker.getWeaponPointSpeed(contactT, true);
+    }
+
     collision.forwardDrive = relativeSpeed;
     collision.towardTarget = towardTarget;
+    const { towardTarget: towardThreshold, relativeSpeed: speedThreshold } =
+      getMotionThresholds(attacker.weaponType);
+
     collision.motionGatePassed =
-      relativeSpeed > TIP_RELATIVE_SPEED_THRESHOLD &&
-      towardTarget > TIP_TOWARD_TARGET_THRESHOLD;
+      relativeSpeed > speedThreshold &&
+      towardTarget > towardThreshold;
     if (
-      relativeSpeed <= TIP_RELATIVE_SPEED_THRESHOLD ||
-      towardTarget <= TIP_TOWARD_TARGET_THRESHOLD
+      relativeSpeed <= speedThreshold ||
+      towardTarget <= towardThreshold
     ) {
       collision.lastCheckResult = 'blocked_motion';
       return false;
     }
 
-    const dist = this._distToVerticalCylinder(base, tip, _defenderCenter, HURT_RADIUS, HURT_HEIGHT);
+    const dist = attacker.weaponType === WeaponType.SPEAR
+      ? this._pointToCylinderDistanceForCenter(
+        tip,
+        _defenderCenter,
+        HURT_CYLINDER.radius,
+        HURT_CYLINDER.height,
+      )
+      : this._distToVerticalCylinder(
+        base,
+        tip,
+        _defenderCenter,
+        HURT_CYLINDER.radius,
+        HURT_CYLINDER.height,
+      );
     collision.distance = dist;
-    collision.segmentHit = dist <= 0;
+    collision.segmentHit = dist <= hitRadius;
     collision.lastCheckResult = collision.segmentHit ? 'cylinder_hit' : 'out_of_range';
     return collision.segmentHit;
+  }
+
+  _closestPointParamOnSegment(point, start, end) {
+    _lineDir.subVectors(end, start);
+    const lenSq = _lineDir.lengthSq();
+    if (lenSq < 1e-8) return 0;
+    _toPoint.subVectors(point, start);
+    return THREE.MathUtils.clamp(_toPoint.dot(_lineDir) / lenSq, 0, 1);
+  }
+
+  _pointToCylinderDistanceForCenter(point, center, radius, height) {
+    const yMin = center.y - (height * 0.5);
+    const yMax = center.y + (height * 0.5);
+    return this._pointToCylinderDistance(point, center, radius, yMin, yMax);
   }
 
   _distToVerticalCylinder(lineStart, lineEnd, center, radius, height) {

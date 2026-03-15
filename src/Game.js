@@ -9,6 +9,7 @@ import { Fighter } from './entities/Fighter.js';
 import { ModelLoader } from './entities/ModelLoader.js';
 import { CHARACTER_DEFS, DEFAULT_CHAR } from './entities/CharacterDefs.js';
 import { HitResolver } from './combat/HitResolver.js';
+import { getBodyRadius, getImpactScale } from './combat/CombatTuning.js';
 import { ParticleSystem } from './vfx/ParticleSystem.js';
 import { ScreenEffects } from './vfx/ScreenEffects.js';
 import { AIController } from './ai/AIController.js';
@@ -19,7 +20,7 @@ import {
   FIGHT_START_DISTANCE, ROUNDS_TO_WIN, ROUND_INTRO_DURATION,
   ROUND_END_DELAY, ARENA_RADIUS, BLOCK_PUSHBACK_SPEED,
   KNOCKBACK_SLIDE_SPEED, HEAVY_ADVANTAGE_MULT,
-  CLASH_PUSHBACK_FRAMES, BLOCK_STUN_FRAMES, PARRIED_STUN_FRAMES,
+  CLASH_PUSHBACK_FRAMES, BLOCK_STUN_FRAMES, HIT_STUN_FRAMES, PARRIED_STUN_FRAMES,
 } from './core/Constants.js';
 
 const _pairBodyA = new THREE.Vector3();
@@ -358,7 +359,7 @@ export class Game {
     this.fighter1.update(dt, this.fighter2);
     this.fighter2.update(dt, this.fighter1);
 
-    // Block pushback: push defender back while attacker is in ATTACK_ACTIVE and defender is blocking
+    // Block pushback: push defender back while attacker is performing an attack and defender is blocking
     this._applyBlockPushback(this.fighter1, this.fighter2, dt);
     this._applyBlockPushback(this.fighter2, this.fighter1, dt);
 
@@ -394,7 +395,7 @@ export class Game {
   }
 
   _applyBlockPushback(attacker, defender, dt) {
-    if (attacker.state !== FighterState.ATTACK_ACTIVE) return;
+    if (!attacker.fsm.isAttacking) return;
     if (defender.state !== FighterState.BLOCK && defender.state !== FighterState.BLOCK_STUN) return;
 
     // Block pushback should use the actual weapon-vs-hurt-cylinder contact,
@@ -406,7 +407,8 @@ export class Game {
     // Transition blocker to BLOCK_STUN so block_knockback animation plays during pushback
     if (defender.state === FighterState.BLOCK) {
       const isHeavy = attacker.fsm.currentAttackType === AttackType.HEAVY;
-      const mult = isHeavy ? HEAVY_ADVANTAGE_MULT : 1;
+      const heavyBonus = isHeavy ? HEAVY_ADVANTAGE_MULT : 1;
+      const mult = this._getImpactScale(attacker, defender, heavyBonus);
       defender.fsm.applyBlockStun(Math.round(BLOCK_STUN_FRAMES * mult));
       defender.knockbackMult = mult;
     }
@@ -415,8 +417,9 @@ export class Game {
     const nx = dx / (dist || 0.01);
     const nz = dz / (dist || 0.01);
 
-    defender.position.x += nx * BLOCK_PUSHBACK_SPEED * dt;
-    defender.position.z += nz * BLOCK_PUSHBACK_SPEED * dt;
+    const pushbackScale = defender.knockbackMult || this._getImpactScale(attacker, defender);
+    defender.position.x += nx * BLOCK_PUSHBACK_SPEED * pushbackScale * dt;
+    defender.position.z += nz * BLOCK_PUSHBACK_SPEED * pushbackScale * dt;
   }
 
   _applyKnockbackSlide(a, b, dt) {
@@ -485,15 +488,9 @@ export class Game {
   }
 
   _checkHits() {
-    const isAttacking = (f) =>
-      f.state === FighterState.ATTACK_STARTUP ||
-      f.state === FighterState.ATTACK_ACTIVE ||
-      f.state === FighterState.ATTACK_RECOVERY;
-    const isAttackActive = (f) => f.state === FighterState.ATTACK_ACTIVE;
-
     if (
-      isAttackActive(this.fighter1) &&
-      isAttackActive(this.fighter2) &&
+      this.fighter1.fsm.isAttacking &&
+      this.fighter2.fsm.isAttacking &&
       !this.fighter1.hitApplied &&
       !this.fighter2.hitApplied &&
       this.hitResolver.checkWeaponClash(this.fighter1, this.fighter2)
@@ -508,14 +505,14 @@ export class Game {
       return;
     }
 
-    if (isAttacking(this.fighter1) && !this.fighter1.hitApplied) {
+    if (this.fighter1.fsm.isAttacking && !this.fighter1.hitApplied) {
       if (this.hitResolver.checkSwordCollision(this.fighter1, this.fighter2)) {
         this._resolveHit(this.fighter1, this.fighter2);
         this.fighter1.hitApplied = true;
       }
     }
 
-    if (isAttacking(this.fighter2) && !this.fighter2.hitApplied) {
+    if (this.fighter2.fsm.isAttacking && !this.fighter2.hitApplied) {
       if (this.hitResolver.checkSwordCollision(this.fighter2, this.fighter1)) {
         this._resolveHit(this.fighter2, this.fighter1);
         this.fighter2.hitApplied = true;
@@ -541,8 +538,10 @@ export class Game {
         const defType = result.defenderType;
         const atkHeavy = atkType === AttackType.HEAVY;
         const defHeavy = defType === AttackType.HEAVY;
-        const atkMult = (defHeavy && !atkHeavy) ? HEAVY_ADVANTAGE_MULT : 1;
-        const defMult = (atkHeavy && !defHeavy) ? HEAVY_ADVANTAGE_MULT : 1;
+        const atkHeavyBonus = (defHeavy && !atkHeavy) ? HEAVY_ADVANTAGE_MULT : 1;
+        const defHeavyBonus = (atkHeavy && !defHeavy) ? HEAVY_ADVANTAGE_MULT : 1;
+        const atkMult = this._getImpactScale(defender, attacker, atkHeavyBonus);
+        const defMult = this._getImpactScale(attacker, defender, defHeavyBonus);
         attacker.fsm.applyClash(Math.round(CLASH_PUSHBACK_FRAMES * atkMult));
         defender.fsm.applyClash(Math.round(CLASH_PUSHBACK_FRAMES * defMult));
         attacker.knockbackMult = atkMult;
@@ -556,18 +555,22 @@ export class Game {
       case HitResult.WHIFF:
         break;
 
-      case HitResult.PARRIED:
-        attacker.fsm.applyParriedStun();
+      case HitResult.PARRIED: {
+        const parryMult = this._getImpactScale(defender, attacker);
+        attacker.fsm.applyParriedStun(Math.round(PARRIED_STUN_FRAMES * parryMult));
+        attacker.knockbackMult = parryMult;
         defender.fsm.applyParrySuccess();
         this.particles.emitSparks(contactPoint, 10);
         this.cameraController.shake(0.15);
         this.screenEffects.startHitstop(8);
         break;
+      }
 
       case HitResult.BLOCKED: {
         // Heavy attacks cause 1.5x block stun & knockback
         const isHeavy = result.attackerType === AttackType.HEAVY;
-        const blockMult = isHeavy ? HEAVY_ADVANTAGE_MULT : 1;
+        const heavyBonus = isHeavy ? HEAVY_ADVANTAGE_MULT : 1;
+        const blockMult = this._getImpactScale(attacker, defender, heavyBonus);
         attacker.fsm.applyBlockStun();
         defender.fsm.applyBlockStun(Math.round(BLOCK_STUN_FRAMES * blockMult));
         defender.knockbackMult = blockMult;
@@ -579,7 +582,9 @@ export class Game {
 
       case HitResult.CLEAN_HIT: {
         const isKill = defender.damageSystem.applyDamage();
-        defender.fsm.applyHitStun();
+        const hitMult = this._getImpactScale(attacker, defender);
+        defender.fsm.applyHitStun(Math.round(HIT_STUN_FRAMES * hitMult));
+        defender.knockbackMult = hitMult;
         this.particles.emitSparks(contactPoint, 8);
         this.particles.emitBlood(contactPoint, 15);
         this.cameraController.shake(0.25);
@@ -705,12 +710,7 @@ export class Game {
   }
 
   _enforceFighterSeparation(a, b) {
-    const getBodyRadius = (fighter) => {
-      if (typeof fighter.charDef.bodyRadius === 'number') return fighter.charDef.bodyRadius;
-      if (typeof fighter.charDef.bodySeparation === 'number') return fighter.charDef.bodySeparation * 0.5;
-      return 0.4;
-    };
-    const MIN_DIST = getBodyRadius(a) + getBodyRadius(b);
+    const MIN_DIST = getBodyRadius(a.charDef) + getBodyRadius(b.charDef);
     const { dx, dz, dist } = this._getFighterPairDelta(a, b);
     if (dist < MIN_DIST) {
       const overlap = (MIN_DIST - dist) / 2;
@@ -721,6 +721,10 @@ export class Game {
       b.position.x += nx * overlap;
       b.position.z += nz * overlap;
     }
+  }
+
+  _getImpactScale(attacker, defender, bonus = 1) {
+    return getImpactScale(attacker?.charDef, defender?.charDef, bonus);
   }
 
   _pushApart(a, b, force) {

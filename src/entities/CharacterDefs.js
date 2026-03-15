@@ -1,4 +1,5 @@
 import { WeaponType } from '../core/Constants.js';
+import { DEFAULT_WEAPON_TUNING } from '../combat/CombatTuning.js';
 
 export const CHARACTER_DEFS = {
   spearman: {
@@ -30,8 +31,11 @@ export const CHARACTER_DEFS = {
     swapIdle: { from: 'idle_alt', to: 'idle' },
     bakeWeapon: true,
     aiRanges: { engage: 3.5, close: 2.5 },
+    attackStrength: 1.0,
+    defenseStoutness: 0.95,
     bodySeparation: 1.6,
-    weaponClashRadius: 0.09,
+    weaponClashRadius: DEFAULT_WEAPON_TUNING[WeaponType.SPEAR].clashRadius,
+    weaponHitRadius: DEFAULT_WEAPON_TUNING[WeaponType.SPEAR].hitRadius,
   },
   ronin: {
     displayName: 'Ronin',
@@ -50,8 +54,8 @@ export const CHARACTER_DEFS = {
     },
     clipSpeedFactor: { walk: 2, strafe: 2, attack: 2, backstep: 3, knockback: 2 },
     clipSpeedOverrides: {
-      attack_quick: 0.75,
-      attack_heavy: 0.75,
+      attack_quick: 0.85,
+      attack_heavy: 0.85,
       backstep: 0.8333333333333334,
       block_parry: 7.5,
       clash_knockback: 2.734375,
@@ -59,9 +63,13 @@ export const CHARACTER_DEFS = {
     },
     bakeWeapon: true,
     aiRanges: { engage: 2.8, close: 1.8 },
+    attackStrength: 1.1,
+    defenseStoutness: 1.05,
     sidestepDistance: 1.2,
+    sidestepRecoveryFrames: 5,
     bodySeparation: 1.6,
-    weaponClashRadius: 0.09,
+    weaponClashRadius: DEFAULT_WEAPON_TUNING[WeaponType.KATANA].clashRadius,
+    weaponHitRadius: DEFAULT_WEAPON_TUNING[WeaponType.KATANA].hitRadius,
   },
 };
 

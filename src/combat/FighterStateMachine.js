@@ -35,18 +35,20 @@ export class FighterStateMachine {
   }
 
   get isAttacking() {
-    return this.state === FighterState.ATTACK_STARTUP ||
-           this.state === FighterState.ATTACK_ACTIVE ||
-           this.state === FighterState.ATTACK_RECOVERY;
+    return this.state === FighterState.ATTACK_ACTIVE;
   }
 
   transition(newState, duration = 0) {
+    if (this.state === FighterState.ATTACK_ACTIVE && newState !== FighterState.ATTACK_ACTIVE) {
+      this.currentAttackData = null;
+      this.currentAttackType = null;
+    }
     this.state = newState;
     this.stateFrames = 0;
     this.stateDuration = duration;
   }
 
-  startAttack(attackType) {
+  startAttack(attackType, durationFrames) {
     if (!this.isActionable) return false;
 
     const data = getAttackData(attackType, this.fighter.weaponType);
@@ -54,7 +56,7 @@ export class FighterStateMachine {
     this.currentAttackData = data;
     this.currentAttackType = attackType;
     this.hitApplied = false;
-    this.transition(FighterState.ATTACK_STARTUP, data.startup);
+    this.transition(FighterState.ATTACK_ACTIVE, durationFrames);
     return true;
   }
 
@@ -72,9 +74,10 @@ export class FighterStateMachine {
 
   startSidestep(direction) {
     if (!this.isActionable || this.isSidestepRecovery) return false;
+    const recoveryFrames = this.fighter.charDef?.sidestepRecoveryFrames ?? SIDESTEP_RECOVERY_FRAMES;
     this.sidestepDirection = direction;
     this.sidestepPhase = 'dash';
-    this.transition(FighterState.SIDESTEP, SIDESTEP_DASH_FRAMES + SIDESTEP_RECOVERY_FRAMES);
+    this.transition(FighterState.SIDESTEP, SIDESTEP_DASH_FRAMES + recoveryFrames);
     return true;
   }
 
@@ -112,22 +115,8 @@ export class FighterStateMachine {
     this.stateFrames++;
 
     switch (this.state) {
-      case FighterState.ATTACK_STARTUP:
-        if (this.stateFrames >= this.currentAttackData.startup) {
-          this.transition(FighterState.ATTACK_ACTIVE, this.currentAttackData.active);
-        }
-        break;
-
       case FighterState.ATTACK_ACTIVE:
-        if (this.stateFrames >= this.currentAttackData.active) {
-          this.transition(FighterState.ATTACK_RECOVERY, this.currentAttackData.recovery);
-        }
-        break;
-
-      case FighterState.ATTACK_RECOVERY:
-        if (this.stateFrames >= this.currentAttackData.recovery) {
-          this.currentAttackData = null;
-          this.currentAttackType = null;
+        if (this.stateFrames >= this.stateDuration) {
           this.transition(FighterState.IDLE);
         }
         break;
@@ -161,13 +150,16 @@ export class FighterStateMachine {
         break;
 
       case FighterState.SIDESTEP:
+        {
+        const recoveryFrames = this.fighter.charDef?.sidestepRecoveryFrames ?? SIDESTEP_RECOVERY_FRAMES;
         if (this.sidestepPhase === 'dash' && this.stateFrames >= SIDESTEP_DASH_FRAMES) {
           this.sidestepPhase = 'recovery';
           this.stateFrames = 0;
-        } else if (this.sidestepPhase === 'recovery' && this.stateFrames >= SIDESTEP_RECOVERY_FRAMES) {
+        } else if (this.sidestepPhase === 'recovery' && this.stateFrames >= recoveryFrames) {
           this.sidestepDirection = 0;
           this.sidestepPhase = null;
           this.transition(FighterState.IDLE);
+        }
         }
         break;
 

@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { DEBUG_OPTIONS } from '../core/Constants.js';
+import {
+  BODY_COLLISION,
+  getDefaultWeaponClashRadius,
+} from '../combat/CombatTuning.js';
 
 const _segMid = new THREE.Vector3();
 const _segDir = new THREE.Vector3();
@@ -112,7 +116,7 @@ export class DebugOverlay {
     lines.push(`  tipSpeed=${fighter.tipSpeed.toFixed(4)} baseSpeed=${fighter.baseSpeed.toFixed(4)} relTarget=${fighter.tipRelativeToward.toFixed(4)} relForward=${fighter.tipRelativeForward.toFixed(4)}`);
     if (fighter.collision) {
       lines.push(`  collision dist=${fighter.collision.distance.toFixed(4)} hurtRadius=${fighter.collision.hurtRadius.toFixed(3)} hurtHeight=${fighter.collision.hurtHeight.toFixed(3)} defender=${fighter.collision.defenderState ?? '-'}`);
-      lines.push(`  collision motionGate=${fighter.collision.motionGatePassed} forward=${fighter.collision.forwardDrive.toFixed(4)} toward=${fighter.collision.towardTarget.toFixed(4)} segmentHit=${fighter.collision.segmentHit}`);
+      lines.push(`  collision mode=${fighter.collision.weaponHitMode ?? '-'} hitRadius=${(fighter.collision.weaponHitRadius ?? 0).toFixed(3)} window=${fighter.collision.contactWindowPassed} progress=${(fighter.collision.attackProgress ?? 0).toFixed(2)} [${(fighter.collision.contactWindowStart ?? 0).toFixed(2)}..${(fighter.collision.contactWindowEnd ?? 1).toFixed(2)}] motionGate=${fighter.collision.motionGatePassed} forward=${fighter.collision.forwardDrive.toFixed(4)} toward=${fighter.collision.towardTarget.toFixed(4)} segmentHit=${fighter.collision.segmentHit}`);
       lines.push(`  collision resolve=${fighter.collision.lastResolve ?? '-'} result=${fighter.collision.lastCheckResult ?? '-'}`);
       if (Number.isFinite(fighter.collision.weaponClashDistance)) {
         lines.push(`  clash dist=${fighter.collision.weaponClashDistance.toFixed(4)} radius=${fighter.weaponClashRadius.toFixed(3)} overlap=${fighter.collision.weaponClashOverlap} motion=${fighter.collision.weaponClashMotionGate} closing=${fighter.collision.weaponClashClosingDrive.toFixed(4)}`);
@@ -159,7 +163,7 @@ export class DebugOverlay {
     );
 
     const body = new THREE.Mesh(
-      new THREE.CylinderGeometry(1, 1, 1.8, 20, 1, true),
+      new THREE.CylinderGeometry(1, 1, BODY_COLLISION.cylinderHeight, 20, 1, true),
       new THREE.MeshBasicMaterial({
         color: 0xffffff,
         transparent: true,
@@ -259,7 +263,7 @@ export class DebugOverlay {
 
     helper.body.position.set(
       fighter.bodyCollision.x,
-      0.9,
+      BODY_COLLISION.centerHeight,
       fighter.bodyCollision.z,
     );
     helper.body.scale.set(fighter.bodyRadius, 1, fighter.bodyRadius);
@@ -278,7 +282,7 @@ export class DebugOverlay {
     helper.tip.position.copy(tip);
     helper.weaponLine.geometry.setFromPoints([base, tip]);
 
-    const radius = fighter.weaponClashRadius ?? 0.09;
+    const radius = fighter.weaponClashRadius ?? getDefaultWeaponClashRadius(fighter.weaponType);
     _segMid.addVectors(base, tip).multiplyScalar(0.5);
     _segDir.subVectors(tip, base);
     const segLen = _segDir.length();

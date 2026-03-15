@@ -3,6 +3,13 @@ import { ModelLoader } from './ModelLoader.js';
 import { Weapon } from './Weapon.js';
 import { FighterStateMachine } from '../combat/FighterStateMachine.js';
 import { DamageSystem } from '../combat/DamageSystem.js';
+import {
+  BODY_COLLISION,
+  HURT_CYLINDER,
+  WEAPON_FALLBACKS,
+  getBodyRadius,
+  getDefaultWeaponClashRadius,
+} from '../combat/CombatTuning.js';
 import { TrailEffect } from '../animation/TrailEffect.js';
 import {
   FighterState, AttackType, WeaponType,
@@ -15,6 +22,8 @@ import { distance2D } from '../utils/MathUtils.js';
 const _relativeVelocity = new THREE.Vector3();
 const _toTarget = new THREE.Vector3();
 const _spearForward = new THREE.Vector3();
+const _pointVelocity = new THREE.Vector3();
+const _pointToTarget = new THREE.Vector3();
 const _debugOpponentCenter = new THREE.Vector3();
 const _selfBodyPosition = new THREE.Vector3();
 const _opponentBodyPosition = new THREE.Vector3();
@@ -173,8 +182,9 @@ export class Fighter {
       const atk = this.currentAttackData;
       const startFrac = atk.lungeStart ?? 0;
       const endFrac = atk.lungeEnd ?? (atk.lungeRatio || 1.0);
-      const startFrame = atk.active * startFrac;
-      const endFrame = atk.active * endFrac;
+      const attackFrames = Math.max(this.fsm.stateDuration, 1);
+      const startFrame = attackFrames * startFrac;
+      const endFrame = attackFrames * endFrac;
       const lungeFrames = endFrame - startFrame;
       if (lungeFrames > 0 && this.stateFrames >= startFrame && this.stateFrames < endFrame) {
         const lungeSpeed = atk.lunge / lungeFrames * 60;
@@ -187,7 +197,8 @@ export class Fighter {
     // Sidestep movement — perpendicular to facing direction
     if (this.state === FighterState.SIDESTEP && this.fsm.sidestepPhase === 'dash') {
       const sidestepDistance = this.charDef.sidestepDistance ?? SIDESTEP_DASH_DISTANCE;
-      const speed = sidestepDistance / SIDESTEP_DASH_FRAMES * 60;
+      const sidestepFrames = this.charDef.sidestepFrames ?? SIDESTEP_DASH_FRAMES;
+      const speed = sidestepDistance / sidestepFrames * 60;
       const angle = this.group.rotation.y;
       const perpX = -Math.cos(angle) * this.fsm.sidestepDirection;
       const perpZ = Math.sin(angle) * this.fsm.sidestepDirection;
@@ -197,7 +208,9 @@ export class Fighter {
 
     // Backstep movement — away from opponent
     if (this.state === FighterState.DODGE) {
-      const speed = BACKSTEP_DISTANCE / BACKSTEP_FRAMES * 60;
+      const backstepDistance = this.charDef.backstepDistance ?? BACKSTEP_DISTANCE;
+      const backstepFrames = this.charDef.backstepFrames ?? BACKSTEP_FRAMES;
+      const speed = backstepDistance / backstepFrames * 60;
       const angle = this.group.rotation.y;
       this.position.x -= Math.sin(angle) * speed * dt;
       this.position.z -= Math.cos(angle) * speed * dt;
@@ -241,7 +254,7 @@ export class Fighter {
     if (handJoint) {
       return handJoint.getWorldPosition(target);
     }
-    return target.copy(this.position).setY(1.2);
+    return target.copy(this.position).setY(WEAPON_FALLBACKS.baseHeight);
   }
 
   getBodyAnchorWorldPosition(target = new THREE.Vector3()) {
@@ -254,7 +267,7 @@ export class Fighter {
     if (bodyAnchor) {
       return bodyAnchor.getWorldPosition(target);
     }
-    return target.copy(this.position).setY(0.9);
+    return target.copy(this.position).setY(BODY_COLLISION.centerHeight);
   }
 
   getBodyCollisionPosition(target = new THREE.Vector3()) {
@@ -265,7 +278,7 @@ export class Fighter {
 
   getHurtCenterWorldPosition(target = new THREE.Vector3()) {
     this.getBodyAnchorWorldPosition(target);
-    target.y = this.position.y + 0.9;
+    target.y = this.position.y + BODY_COLLISION.centerHeight;
     return target;
   }
 
@@ -288,6 +301,32 @@ export class Fighter {
   getTipRelativeSpeed() {
     _relativeVelocity.subVectors(this._tipVelocity, this._baseVelocity);
     return _relativeVelocity.length();
+  }
+
+  getWeaponPointVelocityToward(target, t = 1, relativeToBase = false) {
+    _pointVelocity.lerpVectors(this._baseVelocity, this._tipVelocity, THREE.MathUtils.clamp(t, 0, 1));
+    if (relativeToBase) {
+      _pointVelocity.sub(this._baseVelocity);
+    }
+    _pointToTarget.subVectors(target, this.getWeaponPointWorldPosition(new THREE.Vector3(), t));
+    if (_pointToTarget.lengthSq() < 1e-6) return 0;
+    _pointToTarget.normalize();
+    return _pointVelocity.dot(_pointToTarget);
+  }
+
+  getWeaponPointSpeed(t = 1, relativeToBase = false) {
+    _pointVelocity.lerpVectors(this._baseVelocity, this._tipVelocity, THREE.MathUtils.clamp(t, 0, 1));
+    if (relativeToBase) {
+      _pointVelocity.sub(this._baseVelocity);
+    }
+    return _pointVelocity.length();
+  }
+
+  getWeaponPointWorldPosition(target = new THREE.Vector3(), t = 1) {
+    const clampedT = THREE.MathUtils.clamp(t, 0, 1);
+    const base = this.getWeaponBaseWorldPosition(new THREE.Vector3());
+    const tip = this.getWeaponTipWorldPosition(new THREE.Vector3());
+    return target.lerpVectors(base, tip, clampedT);
   }
 
   _updateTipMotion() {
@@ -321,13 +360,15 @@ export class Fighter {
     let isMoving = false;
 
     if (this._stepping) {
-      const stepSpeed = STEP_DISTANCE / STEP_FRAMES * 60;
+      const stepDistance = this.charDef.stepDistance ?? STEP_DISTANCE;
+      const stepFrames = this.charDef.stepFrames ?? STEP_FRAMES;
+      const stepSpeed = stepDistance / stepFrames * 60;
       this.position.x += nx * this._stepDirection * stepSpeed * dt;
       this.position.z += nz * this._stepDirection * stepSpeed * dt;
       this._stepFrames++;
       isMoving = true;
 
-      if (this._stepFrames >= STEP_FRAMES) {
+      if (this._stepFrames >= stepFrames) {
         this._stepping = false;
         this._stepFrames = 0;
         this._stepCooldown = STEP_COOLDOWN_FRAMES;
@@ -435,9 +476,7 @@ export class Fighter {
         }
         break;
 
-      case FighterState.ATTACK_STARTUP:
-      case FighterState.ATTACK_ACTIVE:
-      case FighterState.ATTACK_RECOVERY: {
+      case FighterState.ATTACK_ACTIVE: {
         const atkType = this.fsm.currentAttackType;
         if (atkType === AttackType.THRUST) {
           clipName = pick('attack_thrust', 'attack');
@@ -482,9 +521,7 @@ export class Fighter {
   }
 
   _updateTrail() {
-    const isAttacking = this.state === FighterState.ATTACK_ACTIVE ||
-                        this.state === FighterState.ATTACK_STARTUP ||
-                        this.state === FighterState.ATTACK_RECOVERY;
+    const isAttacking = this.state === FighterState.ATTACK_ACTIVE;
     if (isAttacking && !this.trail.active) {
       this.trail.start();
     } else if (!isAttacking && this.trail.active) {
@@ -541,32 +578,26 @@ export class Fighter {
   }
 
   attack(type) {
-    const result = this.fsm.startAttack(type);
-    if (result) {
-      let clipName;
-      if (type === AttackType.THRUST) {
-        clipName = this.clipActions.attack_thrust ? 'attack_thrust' : 'attack';
-      } else if (type === AttackType.HEAVY) {
-        clipName = this.clipActions.attack_heavy ? 'attack_heavy' : 'attack';
-      } else {
-        clipName = this.clipActions.attack_quick ? 'attack_quick' : 'attack';
-      }
-      const action = this.clipActions[clipName];
-      if (action) {
-        const hasSeparateClips = this.clipActions.attack_quick || this.clipActions.attack_heavy || this.clipActions.attack_thrust;
-        const timeScale = (!hasSeparateClips && type === AttackType.HEAVY) ? 0.5 : 1.0;
-        action.timeScale = timeScale;
-        const clipDuration = action.getClip().duration / timeScale;
-        const fsmFrames = Math.ceil(clipDuration * 60);
-        this.fsm.currentAttackData = {
-          ...this.fsm.currentAttackData,
-          startup: 1,
-          active: fsmFrames,
-          recovery: 1,
-        };
-      }
+    let clipName;
+    if (type === AttackType.THRUST) {
+      clipName = this.clipActions.attack_thrust ? 'attack_thrust' : 'attack';
+    } else if (type === AttackType.HEAVY) {
+      clipName = this.clipActions.attack_heavy ? 'attack_heavy' : 'attack';
+    } else {
+      clipName = this.clipActions.attack_quick ? 'attack_quick' : 'attack';
     }
-    return result;
+
+    const action = this.clipActions[clipName];
+    let attackFrames = 1;
+    if (action) {
+      const hasSeparateClips = this.clipActions.attack_quick || this.clipActions.attack_heavy || this.clipActions.attack_thrust;
+      const timeScale = (!hasSeparateClips && type === AttackType.HEAVY) ? 0.5 : 1.0;
+      action.timeScale = timeScale;
+      const clipDuration = action.getClip().duration / timeScale;
+      attackFrames = Math.max(1, Math.ceil(clipDuration * 60));
+    }
+
+    return this.fsm.startAttack(type, attackFrames);
   }
 
   block() {
@@ -590,9 +621,7 @@ export class Fighter {
     let tipRelativeToward = 0;
     const weaponTip = this.getWeaponTipWorldPosition(new THREE.Vector3());
     const weaponBase = this.getWeaponBaseWorldPosition(new THREE.Vector3());
-    const bodyRadius = typeof this.charDef.bodyRadius === 'number'
-      ? this.charDef.bodyRadius
-      : ((typeof this.charDef.bodySeparation === 'number' ? this.charDef.bodySeparation : 0.8) * 0.5);
+    const bodyRadius = getBodyRadius(this.charDef);
     const hurtCenter = this.getHurtCenterWorldPosition(new THREE.Vector3());
     const bodyCollision = this.getBodyCollisionPosition(new THREE.Vector3());
     if (opponent) {
@@ -648,9 +677,9 @@ export class Fighter {
         y: hurtCenter.y,
         z: hurtCenter.z,
       },
-      weaponClashRadius: this.charDef.weaponClashRadius ?? 0.09,
-      hurtRadius: this._debugCollision?.hurtRadius ?? 0.5,
-      hurtHeight: this._debugCollision?.hurtHeight ?? 1.8,
+      weaponClashRadius: this.charDef.weaponClashRadius ?? getDefaultWeaponClashRadius(this.weaponType),
+      hurtRadius: this._debugCollision?.hurtRadius ?? HURT_CYLINDER.radius,
+      hurtHeight: this._debugCollision?.hurtHeight ?? HURT_CYLINDER.height,
       bodyRadius,
       collision: this._debugCollision ? { ...this._debugCollision } : null,
     };
