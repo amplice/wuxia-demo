@@ -113,7 +113,11 @@ export class Game {
   _getCharData(charId) {
     const id = CHARACTER_DEFS[charId] ? charId : DEFAULT_CHAR;
     const def = CHARACTER_DEFS[id];
-    return { animData: this._charCache[id], charDef: def };
+    const animData = this._charCache[id];
+    if (!animData) {
+      throw new Error(`Character asset '${id}' failed to load.`);
+    }
+    return { animData, charDef: def, resolvedId: id };
   }
 
   _startMatch(p1Char, p2Char) {
@@ -367,6 +371,11 @@ export class Game {
     // Check combat hits
     this._checkHits();
 
+    // State changes from pushback/hit resolution happen after Fighter.update(),
+    // so refresh state-driven visuals before render.
+    this.fighter1.syncStatePresentation();
+    this.fighter2.syncStatePresentation();
+
     // Ring-out check
     this._checkRingOut();
 
@@ -388,10 +397,11 @@ export class Game {
     if (attacker.state !== FighterState.ATTACK_ACTIVE) return;
     if (defender.state !== FighterState.BLOCK && defender.state !== FighterState.BLOCK_STUN) return;
 
-    // Only push if defender is within attack reach + small buffer
+    // Block pushback should use the actual weapon-vs-hurt-cylinder contact,
+    // not a coarse body-center range check.
+    if (!this.hitResolver.checkWeaponOverlap(attacker, defender)) return;
+
     const { dx, dz, dist } = this._getFighterPairDelta(attacker, defender);
-    const reach = attacker.currentAttackData ? attacker.currentAttackData.reach : 2.0;
-    if (dist > reach + 0.2) return;
 
     // Transition blocker to BLOCK_STUN so block_knockback animation plays during pushback
     if (defender.state === FighterState.BLOCK) {
@@ -479,6 +489,24 @@ export class Game {
       f.state === FighterState.ATTACK_STARTUP ||
       f.state === FighterState.ATTACK_ACTIVE ||
       f.state === FighterState.ATTACK_RECOVERY;
+    const isAttackActive = (f) => f.state === FighterState.ATTACK_ACTIVE;
+
+    if (
+      isAttackActive(this.fighter1) &&
+      isAttackActive(this.fighter2) &&
+      !this.fighter1.hitApplied &&
+      !this.fighter2.hitApplied &&
+      this.hitResolver.checkWeaponClash(this.fighter1, this.fighter2)
+    ) {
+      this._applyResolvedHit(this.fighter1, this.fighter2, {
+        result: HitResult.CLASH,
+        attackerType: this.fighter1.fsm.currentAttackType,
+        defenderType: this.fighter2.fsm.currentAttackType,
+      });
+      this.fighter1.hitApplied = true;
+      this.fighter2.hitApplied = true;
+      return;
+    }
 
     if (isAttacking(this.fighter1) && !this.fighter1.hitApplied) {
       if (this.hitResolver.checkSwordCollision(this.fighter1, this.fighter2)) {
@@ -497,7 +525,10 @@ export class Game {
 
   _resolveHit(attacker, defender) {
     const result = this.hitResolver.resolve(attacker, defender);
+    this._applyResolvedHit(attacker, defender, result);
+  }
 
+  _applyResolvedHit(attacker, defender, result) {
     const contactPoint = new THREE.Vector3().lerpVectors(
       attacker.position, defender.position, 0.6
     );

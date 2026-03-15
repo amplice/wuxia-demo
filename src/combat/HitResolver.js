@@ -9,12 +9,22 @@ const HURT_RADIUS = 0.5;
 const HURT_HEIGHT = 1.8;
 const TIP_TOWARD_TARGET_THRESHOLD = 0.001;
 const TIP_RELATIVE_SPEED_THRESHOLD = 0.002;
+const WEAPON_CLASH_DISTANCE = 0.16;
 
 const _defenderCenter = new THREE.Vector3();
 const _lineDir = new THREE.Vector3();
 const _toPoint = new THREE.Vector3();
 const _closest = new THREE.Vector3();
 const _candidatePoint = new THREE.Vector3();
+const _segP1 = new THREE.Vector3();
+const _segQ1 = new THREE.Vector3();
+const _segP2 = new THREE.Vector3();
+const _segQ2 = new THREE.Vector3();
+const _segD1 = new THREE.Vector3();
+const _segD2 = new THREE.Vector3();
+const _segR = new THREE.Vector3();
+const _segC1 = new THREE.Vector3();
+const _segC2 = new THREE.Vector3();
 
 export class HitResolver {
   resolve(attacker, defender) {
@@ -30,7 +40,7 @@ export class HitResolver {
     };
 
     // Priority 1: Both attacking -> Clash
-    if (this._isInActiveFrames(defender)) {
+    if (this._isInActiveFrames(defender) && this.checkWeaponClash(attacker, defender)) {
       return finish(HitResult.CLASH);
     }
 
@@ -64,6 +74,21 @@ export class HitResolver {
 
   _isInActiveFrames(fighter) {
     return fighter.state === FighterState.ATTACK_ACTIVE;
+  }
+
+  checkWeaponOverlap(attacker, defender) {
+    const tip = attacker.getWeaponTipWorldPosition(new THREE.Vector3());
+    const base = attacker.getWeaponBaseWorldPosition(new THREE.Vector3());
+    defender.getHurtCenterWorldPosition(_defenderCenter);
+    return this._distToVerticalCylinder(base, tip, _defenderCenter, HURT_RADIUS, HURT_HEIGHT) <= 0;
+  }
+
+  checkWeaponClash(attacker, defender) {
+    const aBase = attacker.getWeaponBaseWorldPosition(_segP1);
+    const aTip = attacker.getWeaponTipWorldPosition(_segQ1);
+    const bBase = defender.getWeaponBaseWorldPosition(_segP2);
+    const bTip = defender.getWeaponTipWorldPosition(_segQ2);
+    return this._distBetweenSegments(aBase, aTip, bBase, bTip) <= WEAPON_CLASH_DISTANCE;
   }
 
   checkSwordCollision(attacker, defender) {
@@ -174,6 +199,58 @@ export class HitResolver {
 
     _closest.copy(_lineDir).multiplyScalar(t).add(lineStart);
     return point.distanceTo(_closest);
+  }
+
+  _distBetweenSegments(p1, q1, p2, q2) {
+    _segD1.subVectors(q1, p1);
+    _segD2.subVectors(q2, p2);
+    _segR.subVectors(p1, p2);
+
+    const a = _segD1.dot(_segD1);
+    const e = _segD2.dot(_segD2);
+    const f = _segD2.dot(_segR);
+    const EPS = 1e-8;
+    let s;
+    let t;
+
+    if (a <= EPS && e <= EPS) {
+      return p1.distanceTo(p2);
+    }
+
+    if (a <= EPS) {
+      s = 0;
+      t = THREE.MathUtils.clamp(f / e, 0, 1);
+    } else {
+      const c = _segD1.dot(_segR);
+      if (e <= EPS) {
+        t = 0;
+        s = THREE.MathUtils.clamp(-c / a, 0, 1);
+      } else {
+        const b = _segD1.dot(_segD2);
+        const denom = a * e - b * b;
+
+        if (denom !== 0) {
+          s = THREE.MathUtils.clamp((b * f - c * e) / denom, 0, 1);
+        } else {
+          s = 0;
+        }
+
+        const tNom = b * s + f;
+        if (tNom < 0) {
+          t = 0;
+          s = THREE.MathUtils.clamp(-c / a, 0, 1);
+        } else if (tNom > e) {
+          t = 1;
+          s = THREE.MathUtils.clamp((b - c) / a, 0, 1);
+        } else {
+          t = tNom / e;
+        }
+      }
+    }
+
+    _segC1.copy(_segD1).multiplyScalar(s).add(p1);
+    _segC2.copy(_segD2).multiplyScalar(t).add(p2);
+    return _segC1.distanceTo(_segC2);
   }
 
 }

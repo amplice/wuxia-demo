@@ -21,6 +21,11 @@ const _opponentBodyPosition = new THREE.Vector3();
 
 export class Fighter {
   constructor(playerIndex, color, charDef, animData) {
+    if (!animData?.model || !animData?.clips) {
+      const charName = charDef?.displayName || 'unknown';
+      throw new Error(`Missing animation data for fighter '${charName}'`);
+    }
+
     this.playerIndex = playerIndex;
     this.isP2 = playerIndex === 1;
     this.charDef = charDef;
@@ -39,22 +44,25 @@ export class Fighter {
     this.mixer = result.mixer;
     this.clipActions = result.actions;
 
-    // Apply model-specific root rotation (e.g. Mixamo models face -Z, need PI flip)
-    if (charDef.rootRotationY) {
-      root.rotation.y = charDef.rootRotationY;
-    }
-    if (charDef.modelRotationX) {
-      root.rotation.x += charDef.modelRotationX;
-    }
-    if (charDef.modelYOffset) {
-      root.position.y += charDef.modelYOffset;
-    }
-
     this.root = root;
     this.joints = joints;
+    this.visualRoot = new THREE.Group();
+    this.visualRoot.add(this.root);
+
+    // Visual-only alignment tweaks live on a wrapper so gameplay anchors keep
+    // using the clean GLB root transform.
+    if (charDef.rootRotationY) {
+      this.visualRoot.rotation.y = charDef.rootRotationY;
+    }
+    if (charDef.modelRotationX) {
+      this.visualRoot.rotation.x += charDef.modelRotationX;
+    }
+    if (charDef.modelYOffset) {
+      this.visualRoot.position.y += charDef.modelYOffset;
+    }
 
     this.group = new THREE.Group();
-    this.group.add(this.root);
+    this.group.add(this.visualRoot);
 
     this.weapon = new Weapon(this.weaponType);
 
@@ -507,6 +515,12 @@ export class Fighter {
     ind.group.rotation.y = -this.group.rotation.y;
   }
 
+  syncStatePresentation() {
+    this._updateClipAnimation();
+    this._updateStateIndicators();
+    this._updateTrail();
+  }
+
   sidestep(direction) {
     return this.fsm.startSidestep(direction);
   }
@@ -671,10 +685,10 @@ export class Fighter {
       velX: dirX * 0.8,
       velY: 0,
       velZ: dirZ * 0.8,
-      rootStartX: this.root.rotation.x,
-      rootStartZ: this.root.rotation.z,
-      rootTargetX: this.root.rotation.x + (Math.PI / 2 + Math.random() * 0.3) * (Math.random() > 0.5 ? 1 : -1),
-      rootTargetZ: this.root.rotation.z + (Math.random() - 0.5) * 0.8,
+      rootStartX: this.visualRoot.rotation.x,
+      rootStartZ: this.visualRoot.rotation.z,
+      rootTargetX: this.visualRoot.rotation.x + (Math.PI / 2 + Math.random() * 0.3) * (Math.random() > 0.5 ? 1 : -1),
+      rootTargetZ: this.visualRoot.rotation.z + (Math.random() - 0.5) * 0.8,
       rootProgress: 0,
       bones,
       time: 0,
@@ -695,12 +709,12 @@ export class Fighter {
 
     r.rootProgress = Math.min(r.rootProgress + realDt * 0.8, 1);
     const ease = r.rootProgress * r.rootProgress;
-    this.root.rotation.x = r.rootStartX + (r.rootTargetX - r.rootStartX) * ease;
-    this.root.rotation.z = r.rootStartZ + (r.rootTargetZ - r.rootStartZ) * ease;
+    this.visualRoot.rotation.x = r.rootStartX + (r.rootTargetX - r.rootStartX) * ease;
+    this.visualRoot.rotation.z = r.rootStartZ + (r.rootTargetZ - r.rootStartZ) * ease;
 
-    const forwardTilt = Math.max(0, this.root.rotation.x) * 0.4;
-    const backwardTilt = Math.max(0, -this.root.rotation.x) * 0.2;
-    const sideTilt = Math.abs(this.root.rotation.z) * 0.15;
+    const forwardTilt = Math.max(0, this.visualRoot.rotation.x) * 0.4;
+    const backwardTilt = Math.max(0, -this.visualRoot.rotation.x) * 0.2;
+    const sideTilt = Math.abs(this.visualRoot.rotation.z) * 0.15;
     this.position.y = Math.max(0, forwardTilt + backwardTilt + sideTilt);
 
     for (const b of r.bones) {
@@ -725,8 +739,9 @@ export class Fighter {
     this.trail.stop();
     this.walkPhase = 0;
     this._ragdoll = null;
-    this.root.rotation.x = this.charDef.modelRotationX ?? 0;
-    this.root.rotation.z = 0;
+    this.visualRoot.rotation.y = this.charDef.rootRotationY ?? 0;
+    this.visualRoot.rotation.x = this.charDef.modelRotationX ?? 0;
+    this.visualRoot.rotation.z = 0;
     this.position.y = 0;
 
     if (this.mixer) {

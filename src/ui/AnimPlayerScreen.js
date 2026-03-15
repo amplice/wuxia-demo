@@ -5,6 +5,7 @@ export class AnimPlayerScreen {
     this.onClipSwitch = null;
 
     this._clipListEl = document.getElementById('anim-clip-list');
+    this._characterPickerEl = null;
     this._clipNameEl = document.getElementById('anim-current-name');
     this._timeEl = document.getElementById('anim-time');
     this._frameEl = document.getElementById('anim-frame');
@@ -19,11 +20,36 @@ export class AnimPlayerScreen {
     this._btnSpeedUp = document.getElementById('anim-btn-speed-up');
 
     this.actions = {};
+    this.entries = [];
+    this.selectedEntryLabel = '';
     this.currentAction = null;
     this.currentClipName = '';
     this.speed = 1.0;
 
+    this._ensureCharacterPicker();
     this._setupControls();
+  }
+
+  _ensureCharacterPicker() {
+    const sidebar = this.el.querySelector('.anim-sidebar');
+    if (!sidebar) return;
+
+    const label = document.createElement('div');
+    label.className = 'anim-now-playing';
+    label.textContent = 'CHARACTER';
+
+    const select = document.createElement('select');
+    select.className = 'anim-ctrl-btn';
+    select.style.width = '100%';
+    select.style.marginBottom = '12px';
+    select.addEventListener('change', () => {
+      this.selectedEntryLabel = select.value;
+      this._buildClipList();
+    });
+
+    sidebar.insertBefore(select, this._clipListEl);
+    sidebar.insertBefore(label, select);
+    this._characterPickerEl = select;
   }
 
   _setupControls() {
@@ -48,14 +74,35 @@ export class AnimPlayerScreen {
     });
   }
 
-  setMixerAndActions(mixer, actions) {
-    this.actions = actions;
+  setEntries(entries) {
+    this.entries = entries;
+    this.actions = {};
+    for (const entry of entries) {
+      for (const [name, action] of Object.entries(entry.actions)) {
+        this.actions[`${entry.label}::${name}`] = action;
+      }
+    }
+
+    if (this._characterPickerEl) {
+      this._characterPickerEl.innerHTML = '';
+      for (const entry of entries) {
+        const option = document.createElement('option');
+        option.value = entry.label;
+        option.textContent = entry.label;
+        this._characterPickerEl.appendChild(option);
+      }
+      this.selectedEntryLabel = entries[0]?.label || '';
+      this._characterPickerEl.value = this.selectedEntryLabel;
+    }
+
     this._buildClipList();
   }
 
   _buildClipList() {
     this._clipListEl.innerHTML = '';
-    const names = Object.keys(this.actions);
+    const names = Object.keys(this.actions)
+      .filter((key) => key.startsWith(this.selectedEntryLabel + '::'))
+      .map((key) => key.split('::')[1]);
 
     if (names.length === 0) {
       this._clipListEl.innerHTML = '<div style="color:#666;font-style:italic;">No animations loaded</div>';
@@ -83,7 +130,7 @@ export class AnimPlayerScreen {
     }
 
     this.currentClipName = name;
-    this.currentAction = this.actions[name];
+    this.currentAction = this.actions[`${this.selectedEntryLabel}::${name}`];
     this._clipNameEl.textContent = name;
 
     if (this.currentAction) {

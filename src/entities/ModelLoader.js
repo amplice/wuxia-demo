@@ -32,14 +32,23 @@ export class ModelLoader {
    */
   static async loadCharacter(charDef) {
     const gltf = await ModelLoader._loadGLB(charDef.glbPath);
-    const model = gltf.scene;
+    const model = ModelLoader._pickBestScene(gltf);
     ModelLoader._pruneHelperNodes(model);
 
     const clips = {};
     for (const clip of gltf.animations) {
       let name = clip.name.includes('|') ? clip.name.split('|').pop() : clip.name;
       name = name.replace(/_(Character_All|Armature)$/, '');
-      clips[name] = clip;
+      if (!clips[name]) {
+        clips[name] = clip;
+        continue;
+      }
+
+      const existingScore = ModelLoader._scoreClipQuality(clips[name]);
+      const candidateScore = ModelLoader._scoreClipQuality(clip);
+      if (candidateScore >= existingScore) {
+        clips[name] = clip;
+      }
     }
 
     // Swap idle if configured
@@ -127,6 +136,32 @@ export class ModelLoader {
     });
 
     return { model, clips, texture: null, charDef };
+  }
+
+  static _pickBestScene(gltf) {
+    const scenes = gltf.scenes && gltf.scenes.length ? gltf.scenes : [gltf.scene];
+    let bestScene = gltf.scene || scenes[0];
+    let bestScore = -Infinity;
+
+    for (const scene of scenes) {
+      let score = 0;
+      scene.traverse((child) => {
+        const name = child.name || '';
+        const lower = name.toLowerCase();
+        if (name === 'Character_All') score += 200;
+        if (name === 'Character_Geo' || name === 'original_geo' || name === 'Katana') score += 40;
+        if (child.isBone) score += 1;
+        if (name.endsWith('.001')) score -= 80;
+        if (lower.includes('griptarget') || lower.includes('poletarget')) score -= 60;
+      });
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestScene = scene;
+      }
+    }
+
+    return bestScene;
   }
 
   static _loadFBX(url) {
@@ -331,6 +366,18 @@ export class ModelLoader {
     }
   }
 
+  static _scoreClipQuality(clip) {
+    let score = clip.tracks.length;
+    for (const track of clip.tracks) {
+      const lower = track.name.toLowerCase();
+      if (lower.includes('right_shoulder')) score += 50;
+      if (lower.includes('left_shoulder')) score += 10;
+      if (/(^|[.\[])\d+([.\]]|$)/.test(lower)) score -= 100;
+      if (lower.includes('.001')) score -= 25;
+    }
+    return score;
+  }
+
   static _pruneRedundantTracks(clip) {
     clip.tracks = clip.tracks.filter((track) => {
       const lowerName = track.name.toLowerCase();
@@ -442,10 +489,33 @@ export class ModelLoader {
   }
 
   static _pruneHelperNodes(root) {
+    const hasBaseName = new Set();
+    root.traverse((child) => {
+      hasBaseName.add(child.name);
+    });
+
     const toRemove = [];
     root.traverse((child) => {
       const lower = child.name.toLowerCase();
-      if (lower === 'icosphere' || lower.includes('griptarget')) {
+      const baseName = child.name.replace(/\.\d+$/, '');
+      const isDuplicateExportNode = (
+        child.name !== baseName &&
+        hasBaseName.has(baseName) &&
+        (
+          baseName === 'Character_All' ||
+          baseName === 'Character_Geo' ||
+          baseName === 'original_geo' ||
+          baseName === 'Katana' ||
+          baseName === 'LeftHandKatanaGripTarget' ||
+          baseName === 'LeftHandKatanaPoleTarget'
+        )
+      );
+      if (
+        lower === 'icosphere' ||
+        lower.includes('griptarget') ||
+        lower.includes('poletarget') ||
+        isDuplicateExportNode
+      ) {
         toRemove.push(child);
       }
     });
