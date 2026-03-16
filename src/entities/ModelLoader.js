@@ -25,10 +25,10 @@ export class ModelLoader {
   ];
 
   static BODY_ANCHOR_BONE_NAMES = [
-    'spine1', 'mixamorig_spine1',
-    'spine', 'mixamorig_spine',
-    'spine2', 'mixamorig_spine2',
     'pelvis', 'hips', 'mixamorig_hips',
+    'spine', 'mixamorig_spine',
+    'spine1', 'mixamorig_spine1',
+    'spine2', 'mixamorig_spine2',
   ];
 
   /**
@@ -195,6 +195,7 @@ export class ModelLoader {
       if (child.isSkinnedMesh) child.frustumCulled = false;
       if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }
     });
+    ModelLoader._alignRootToBodyAnchor(r);
   }
 
   static async loadAnimPlayerEntries(items) {
@@ -410,7 +411,7 @@ export class ModelLoader {
   /**
    * Create a fighter instance from a GLB model with fight animation clips.
    */
-  static createFighterFromGLB(model, clips, tintColor = null, texture = null) {
+  static createFighterFromGLB(model, clips, texture = null) {
     const clone = SkeletonUtils.clone(model);
     ModelLoader._pruneHelperNodes(clone);
 
@@ -418,10 +419,9 @@ export class ModelLoader {
       if (child.isMesh) {
         const applyMat = (mat) => {
           const m = mat.clone();
-          if (texture) m.map = texture;
-          if (tintColor) m.color.set(tintColor);
-          m.needsUpdate = true;
-          return m;
+            if (texture) m.map = texture;
+            m.needsUpdate = true;
+            return m;
         };
         if (Array.isArray(child.material)) {
           child.material = child.material.map(applyMat);
@@ -480,6 +480,8 @@ export class ModelLoader {
       joints.weaponTip = joints.spearTip;
     }
 
+    ModelLoader._alignRootToBodyAnchor(clone, joints.bodyAnchor);
+
     clone.updateWorldMatrix(true, true);
     if (joints.bodyAnchor) {
       const anchorWorld = joints.bodyAnchor.getWorldPosition(new THREE.Vector3());
@@ -529,6 +531,28 @@ export class ModelLoader {
     for (const child of toRemove) {
       if (child.parent) child.parent.remove(child);
     }
+  }
+
+  static _findBodyAnchor(root) {
+    let bodyAnchor = null;
+    root.traverse((child) => {
+      if (bodyAnchor || !child.isBone) return;
+      const n = ModelLoader._normalizeBoneName(child.name);
+      if (ModelLoader.BODY_ANCHOR_BONE_NAMES.includes(n)) {
+        bodyAnchor = child;
+      }
+    });
+    return bodyAnchor;
+  }
+
+  static _alignRootToBodyAnchor(root, bodyAnchor = null) {
+    const anchor = bodyAnchor || ModelLoader._findBodyAnchor(root);
+    if (!anchor) return;
+    root.updateWorldMatrix(true, true);
+    const anchorWorld = anchor.getWorldPosition(new THREE.Vector3());
+    root.position.x -= anchorWorld.x;
+    root.position.z -= anchorWorld.z;
+    root.updateWorldMatrix(true, true);
   }
 
   static _normalizeBoneName(name) {

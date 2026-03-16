@@ -28,8 +28,11 @@ const _pointToTarget = new THREE.Vector3();
 const _debugOpponentCenter = new THREE.Vector3();
 const _selfBodyPosition = new THREE.Vector3();
 const _opponentBodyPosition = new THREE.Vector3();
+const _markerBodyPosition = new THREE.Vector3();
 
 export class Fighter {
+  static _playerMarkerTexture = null;
+
   constructor(playerIndex, color, charDef, animData) {
     if (!animData?.model || !animData?.clips) {
       const charName = charDef?.displayName || 'unknown';
@@ -45,9 +48,8 @@ export class Fighter {
     this.clipActions = {};
     this.activeClipName = null;
 
-    const tint = this.isP2 ? 0xaabbff : 0xffcccc;
     const result = ModelLoader.createFighterFromGLB(
-      animData.model, animData.clips, tint, animData.texture
+      animData.model, animData.clips, animData.texture
     );
     const root = result.root;
     const joints = result.joints;
@@ -86,6 +88,8 @@ export class Fighter {
     // State indicators (floating shapes above head)
     this._stateIndicator = this._createStateIndicators();
     this.group.add(this._stateIndicator.group);
+    this._playerMarker = this._createPlayerMarker();
+    this.group.add(this._playerMarker);
 
     // Position
     this.position = this.group.position;
@@ -114,6 +118,10 @@ export class Fighter {
     this._debugCollision = null;
     this._wasAttacking = false;
     this._postAttackTurnTime = 0;
+
+    this._setImmediateIdlePose();
+    this._updatePlayerMarker();
+    this._updateTipMotion();
   }
 
   _createStateIndicators() {
@@ -139,6 +147,77 @@ export class Fighter {
     g.add(success);
 
     return { group: g, block, parry, success };
+  }
+
+  _createPlayerMarker() {
+    const color = this.isP2 ? 0x3f7cff : 0xff4a4a;
+    const markerTexture = Fighter._getPlayerMarkerTexture();
+    const markerGeo = new THREE.PlaneGeometry(1.25, 1.25);
+    const markerMat = new THREE.MeshBasicMaterial({
+      color,
+      map: markerTexture,
+      transparent: true,
+      opacity: 0.7,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const marker = new THREE.Mesh(markerGeo, markerMat);
+    marker.rotation.x = -Math.PI / 2;
+    marker.position.y = 0.012;
+    return marker;
+  }
+
+  static _getPlayerMarkerTexture() {
+    if (Fighter._playerMarkerTexture) return Fighter._playerMarkerTexture;
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createRadialGradient(
+      size * 0.5,
+      size * 0.5,
+      size * 0.28,
+      size * 0.5,
+      size * 0.5,
+      size * 0.5,
+    );
+    gradient.addColorStop(0.0, 'rgba(255,255,255,0.0)');
+    gradient.addColorStop(0.54, 'rgba(255,255,255,0.0)');
+    gradient.addColorStop(0.68, 'rgba(255,255,255,0.82)');
+    gradient.addColorStop(0.78, 'rgba(255,255,255,0.55)');
+    gradient.addColorStop(0.88, 'rgba(255,255,255,0.18)');
+    gradient.addColorStop(1.0, 'rgba(255,255,255,0.0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    Fighter._playerMarkerTexture = texture;
+    return texture;
+  }
+
+  _updatePlayerMarker() {
+    if (!this._playerMarker) return;
+    this.getBodyCollisionPosition(_markerBodyPosition);
+    this.group.worldToLocal(_markerBodyPosition);
+    this._playerMarker.position.x = _markerBodyPosition.x;
+    this._playerMarker.position.z = _markerBodyPosition.z;
+    this._playerMarker.position.y = 0.012;
+  }
+
+  _setImmediateIdlePose() {
+    if (!this.mixer) return;
+    this.mixer.stopAllAction();
+    this.activeClipName = null;
+    const idleAction = this.clipActions.idle;
+    if (!idleAction) return;
+    idleAction.reset();
+    idleAction.timeScale = 1;
+    idleAction.setLoop(THREE.LoopRepeat);
+    idleAction.setEffectiveWeight(1);
+    idleAction.play();
+    this.mixer.update(0);
+    this.activeClipName = 'idle';
   }
 
   get state() { return this.fsm.state; }
@@ -248,6 +327,8 @@ export class Fighter {
     if (this.mixer) {
       this.mixer.update(dt);
     }
+
+    this._updatePlayerMarker();
 
     // Update trail
     this._updateTrail();
@@ -809,17 +890,7 @@ export class Fighter {
     this.position.y = 0;
 
     if (this.mixer) {
-      this.mixer.stopAllAction();
-      this.activeClipName = null;
-      const idleAction = this.clipActions['idle'];
-      if (idleAction) {
-        idleAction.reset();
-        idleAction.timeScale = 1;
-        idleAction.setLoop(THREE.LoopRepeat);
-        idleAction.setEffectiveWeight(1);
-        idleAction.play();
-        this.activeClipName = 'idle';
-      }
+      this._setImmediateIdlePose();
     }
 
     this._tipMotionInitialized = false;
@@ -828,6 +899,7 @@ export class Fighter {
     this._debugCollision = null;
     this._wasAttacking = false;
     this._postAttackTurnTime = 0;
+    this._updatePlayerMarker();
     this._updateTipMotion();
   }
 

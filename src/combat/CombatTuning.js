@@ -1,7 +1,7 @@
 import { WeaponType } from '../core/Constants.js';
 
 export const HURT_CYLINDER = Object.freeze({
-  radius: 0.34,
+  radius: 0.36,
   height: 1.8,
 });
 
@@ -31,10 +31,10 @@ export const IMPACT_TUNING = Object.freeze({
 });
 
 export const FACING_TUNING = Object.freeze({
-  postAttackTurnRate: 14.0,
-  postAttackTurnMinDelta: 0.22,
-  postAttackTurnStopDelta: 0.035,
-  postAttackTurnMaxDuration: 0.22,
+  postAttackTurnRate: 5.5,
+  postAttackTurnMinDelta: 0.05,
+  postAttackTurnStopDelta: 0.02,
+  postAttackTurnMaxDuration: 0.35,
 });
 
 export const DEFAULT_WEAPON_TUNING = Object.freeze({
