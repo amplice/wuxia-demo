@@ -5,6 +5,7 @@ import { FighterStateMachine } from '../combat/FighterStateMachine.js';
 import { DamageSystem } from '../combat/DamageSystem.js';
 import {
   BODY_COLLISION,
+  FACING_TUNING,
   HURT_CYLINDER,
   WEAPON_FALLBACKS,
   getBodyRadius,
@@ -17,7 +18,7 @@ import {
   BACKSTEP_FRAMES, BACKSTEP_DISTANCE,
   STEP_DISTANCE, STEP_FRAMES, STEP_COOLDOWN_FRAMES,
 } from '../core/Constants.js';
-import { distance2D } from '../utils/MathUtils.js';
+import { angleDelta, distance2D, moveAngleTowards } from '../utils/MathUtils.js';
 
 const _relativeVelocity = new THREE.Vector3();
 const _toTarget = new THREE.Vector3();
@@ -111,6 +112,8 @@ export class Fighter {
     this._baseVelocity = new THREE.Vector3();
     this._tipMotionInitialized = false;
     this._debugCollision = null;
+    this._wasAttacking = false;
+    this._postAttackTurnTime = 0;
   }
 
   _createStateIndicators() {
@@ -158,21 +161,46 @@ export class Fighter {
       this._updateTipMotion();
       return;
     }
+    // Update FSM
+    this.fsm.update();
 
-    // Face toward opponent — but lock facing and rotation during attacks
-    if (opponent && !this.fsm.isAttacking) {
+    // Face toward opponent. Attacks still lock facing, but post-attack reacquisition
+    // turns quickly instead of blinking to the new heading in one frame.
+    if (opponent) {
       this.getBodyCollisionPosition(_selfBodyPosition);
       opponent.getBodyCollisionPosition(_opponentBodyPosition);
       const dx = _opponentBodyPosition.x - _selfBodyPosition.x;
       const dz = _opponentBodyPosition.z - _selfBodyPosition.z;
       if ((dx * dx + dz * dz) > 1e-6) {
-        this.facingRight = dx >= 0;
-        this.group.rotation.y = Math.atan2(dx, dz);
-      }
-    }
+        const desiredYaw = Math.atan2(dx, dz);
+        const yawDelta = Math.abs(angleDelta(this.group.rotation.y, desiredYaw));
+        const justExitedAttack = this._wasAttacking && !this.fsm.isAttacking;
 
-    // Update FSM
-    this.fsm.update();
+        if (justExitedAttack && yawDelta >= FACING_TUNING.postAttackTurnMinDelta) {
+          this._postAttackTurnTime = FACING_TUNING.postAttackTurnMaxDuration;
+        }
+
+        this.facingRight = dx >= 0;
+
+        if (!this.fsm.isAttacking) {
+          if (this._postAttackTurnTime > 0) {
+            const maxStep = FACING_TUNING.postAttackTurnRate * dt;
+            this.group.rotation.y = moveAngleTowards(this.group.rotation.y, desiredYaw, maxStep);
+            this._postAttackTurnTime = Math.max(0, this._postAttackTurnTime - dt);
+            if (Math.abs(angleDelta(this.group.rotation.y, desiredYaw)) <= FACING_TUNING.postAttackTurnStopDelta) {
+              this.group.rotation.y = desiredYaw;
+              this._postAttackTurnTime = 0;
+            }
+          } else {
+            this.group.rotation.y = desiredYaw;
+          }
+        }
+      } else {
+        this._postAttackTurnTime = 0;
+      }
+    } else {
+      this._postAttackTurnTime = 0;
+    }
 
     // Update animation based on state
     this._updateClipAnimation();
@@ -233,6 +261,8 @@ export class Fighter {
     if (this.state === FighterState.WALK_FORWARD || this.state === FighterState.WALK_BACK) {
       this.walkPhase += dt * 8;
     }
+
+    this._wasAttacking = this.fsm.isAttacking;
   }
 
   getWeaponTipWorldPosition(target = new THREE.Vector3()) {
@@ -796,6 +826,8 @@ export class Fighter {
     this._tipVelocity.set(0, 0, 0);
     this._baseVelocity.set(0, 0, 0);
     this._debugCollision = null;
+    this._wasAttacking = false;
+    this._postAttackTurnTime = 0;
     this._updateTipMotion();
   }
 
@@ -809,3 +841,5 @@ export class Fighter {
     scene.remove(this.trail.mesh);
   }
 }
+
+

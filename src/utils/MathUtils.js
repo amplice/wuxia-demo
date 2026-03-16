@@ -13,6 +13,19 @@ export function angleLerp(a, b, t) {
   return a + diff * t;
 }
 
+export function angleDelta(a, b) {
+  let diff = b - a;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return diff;
+}
+
+export function moveAngleTowards(a, b, maxStep) {
+  const diff = angleDelta(a, b);
+  if (Math.abs(diff) <= maxStep) return a + diff;
+  return a + Math.sign(diff) * maxStep;
+}
+
 export function distance2D(x1, z1, x2, z2) {
   const dx = x2 - x1;
   const dz = z2 - z1;

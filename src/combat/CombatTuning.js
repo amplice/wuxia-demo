@@ -30,6 +30,13 @@ export const IMPACT_TUNING = Object.freeze({
   maxScale: 1.35,
 });
 
+export const FACING_TUNING = Object.freeze({
+  postAttackTurnRate: 14.0,
+  postAttackTurnMinDelta: 0.22,
+  postAttackTurnStopDelta: 0.035,
+  postAttackTurnMaxDuration: 0.22,
+});
+
 export const DEFAULT_WEAPON_TUNING = Object.freeze({
   [WeaponType.SPEAR]: Object.freeze({
     hitRadius: 0.02,
