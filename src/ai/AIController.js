@@ -1,4 +1,4 @@
-import { AI_PRESETS } from './AIPersonality.js';
+import { resolveAIPersonality } from './AIPersonality.js';
 import { FighterState, AttackType } from '../core/Constants.js';
 import { getAttackData } from '../combat/AttackData.js';
 
@@ -7,31 +7,48 @@ const ATTACK_FRONT_DOT_MIN = 0.55;
 const ATTACK_FRONT_DOT_STRONG = 0.85;
 const ATTACK_RANGE_MARGIN = 0.15;
 const FLANKED_FRONT_DOT = 0.35;
+const RECENT_WHIFF_FRAMES = 48;
+const RECENT_OPPONENT_SIDESTEP_FRAMES = 36;
+const REPEAT_MOBILITY_FRAMES = 32;
 
 export class AIController {
-  constructor(difficulty = 'medium') {
-    this.personality = { ...AI_PRESETS[difficulty] };
+  constructor(profile = 'medium') {
+    this.profileName = 'medium';
+    this.baseProfileName = 'punisher';
+    this.personality = {};
+    this.setDifficulty(profile);
     this.lastDecisionFrame = 0;
     this.pendingAction = null;
     this.currentAction = null;
     this.sideDir = 1;
     this.blockHeldFrames = 0;
 
-    // Opponent tracking
     this._opponentLastState = null;
     this._opponentBlockCount = 0;
     this._opponentAttackCount = 0;
     this._decayTimer = 0;
+    this._selfLastState = null;
+    this._selfWasAttacking = false;
+    this._lastWhiffFrame = -9999;
+    this._opponentLastSidestepFrame = -9999;
+    this._selfLastSidestepFrame = -9999;
+    this._selfLastBackstepFrame = -9999;
+    this._mobilityFatigue = 0;
   }
 
-  setDifficulty(difficulty) {
-    this.personality = { ...AI_PRESETS[difficulty] };
+  setDifficulty(profile) {
+    const resolved = resolveAIPersonality(profile);
+    this.profileName = resolved.name;
+    this.baseProfileName = resolved.baseProfile || resolved.name;
+    this.personality = resolved.personality;
   }
 
   update(fighter, opponent, frameCount, dt) {
     this._opponent = opponent;
+    this._mobilityFatigue = Math.max(0, this._mobilityFatigue - dt * 3.2);
 
-    this._trackOpponent(opponent);
+    this._trackOpponent(opponent, frameCount);
+    this._trackSelf(fighter, frameCount);
 
     if (this.currentAction === 'block') {
       this.blockHeldFrames++;
@@ -58,18 +75,18 @@ export class AIController {
 
     if (shouldInterrupt) {
       this.lastDecisionFrame = frameCount;
-      this._makeDecision(fighter, opponent, dt);
+      this._makeDecision(fighter, opponent, dt, frameCount);
     } else if (frameCount - this.lastDecisionFrame < this.personality.reactionFrames) {
       this._executePersistent(fighter, dt);
     } else {
       this.lastDecisionFrame = frameCount;
-      this._makeDecision(fighter, opponent, dt);
+      this._makeDecision(fighter, opponent, dt, frameCount);
     }
 
     this._applyMovement(fighter, dt);
   }
 
-  _trackOpponent(opponent) {
+  _trackOpponent(opponent, frameCount) {
     const state = opponent.state;
     if (state !== this._opponentLastState) {
       if (state === FighterState.BLOCK || state === FighterState.BLOCK_STUN) {
@@ -77,6 +94,9 @@ export class AIController {
       }
       if (state === FighterState.ATTACK_ACTIVE) {
         this._opponentAttackCount++;
+      }
+      if (state === FighterState.SIDESTEP) {
+        this._opponentLastSidestepFrame = frameCount;
       }
       this._opponentLastState = state;
     }
@@ -87,6 +107,26 @@ export class AIController {
       this._opponentAttackCount = Math.floor(this._opponentAttackCount * 0.7);
       this._decayTimer = 0;
     }
+  }
+
+  _trackSelf(fighter, frameCount) {
+    const state = fighter.state;
+    if (state !== this._selfLastState) {
+      if (state === FighterState.SIDESTEP) {
+        this._selfLastSidestepFrame = frameCount;
+        this._mobilityFatigue += 1.0;
+      }
+      if (state === FighterState.DODGE) {
+        this._selfLastBackstepFrame = frameCount;
+        this._mobilityFatigue += 0.75;
+      }
+      this._selfLastState = state;
+    }
+
+    if (this._selfWasAttacking && !fighter.fsm.isAttacking && !fighter.hitApplied) {
+      this._lastWhiffFrame = frameCount;
+    }
+    this._selfWasAttacking = fighter.fsm.isAttacking;
   }
 
   _checkReactiveInterrupt(fighter, opponent) {
@@ -105,7 +145,7 @@ export class AIController {
     return false;
   }
 
-  _makeDecision(fighter, opponent, dt) {
+  _makeDecision(fighter, opponent, dt, frameCount) {
     if (fighter.state === FighterState.BLOCK) {
       fighter.fsm.transition(FighterState.IDLE);
       this.currentAction = null;
@@ -129,6 +169,10 @@ export class AIController {
     const closeRange = dist < ranges.close;
     const offAngle = engagement.forwardDot < ATTACK_FRONT_DOT_MIN;
     const badlyFlanked = engagement.forwardDot < FLANKED_FRONT_DOT;
+    const recentOwnWhiff = frameCount - this._lastWhiffFrame <= RECENT_WHIFF_FRAMES;
+    const recentOpponentSidestep = frameCount - this._opponentLastSidestepFrame <= RECENT_OPPONENT_SIDESTEP_FRAMES;
+    const repeatedSidestep = frameCount - this._selfLastSidestepFrame <= REPEAT_MOBILITY_FRAMES;
+    const repeatedBackstep = frameCount - this._selfLastBackstepFrame <= REPEAT_MOBILITY_FRAMES;
 
     const opponentAttacking = opponent.fsm.isAttacking;
     const opponentRecovering = false;
@@ -140,49 +184,49 @@ export class AIController {
 
     if (fighter.state === FighterState.PARRY_SUCCESS) {
       if (Math.random() < p.counterRate) {
-        scores.quickAttack = this._scoreAttackOpportunity(fighter, AttackType.QUICK, engagement, 2.0);
-        scores.thrustAttack = this._scoreAttackOpportunity(fighter, AttackType.THRUST, engagement, 1.5);
+        scores.quickAttack = this._scoreAttackOpportunity(fighter, AttackType.QUICK, engagement, 2.0 + (p.quickBias || 0));
+        scores.thrustAttack = this._scoreAttackOpportunity(fighter, AttackType.THRUST, engagement, 1.5 + (p.thrustBias || 0));
       }
     }
 
     if (opponentVulnerable && inRange) {
       if (Math.random() < p.punishRate) {
         scores.quickAttack = (scores.quickAttack || 0) +
-          this._scoreAttackOpportunity(fighter, AttackType.QUICK, engagement, 1.5 + noise());
+          this._scoreAttackOpportunity(fighter, AttackType.QUICK, engagement, 1.5 + (p.quickBias || 0) + noise());
         scores.thrustAttack = (scores.thrustAttack || 0) +
-          this._scoreAttackOpportunity(fighter, AttackType.THRUST, engagement, 1.0 + noise());
+          this._scoreAttackOpportunity(fighter, AttackType.THRUST, engagement, 1.0 + (p.thrustBias || 0) + noise());
       }
     }
 
     if (opponentVulnerable && !inRange && dist < ranges.engage + 1.5) {
       if (Math.random() < p.punishRate) {
-        scores.moveForward = (scores.moveForward || 0) + 1.2;
+        scores.moveForward = (scores.moveForward || 0) + 1.2 + (p.moveForwardBias || 0);
       }
     }
 
     if (inRange) {
       scores.quickAttack = (scores.quickAttack || 0) +
-        this._scoreAttackOpportunity(fighter, AttackType.QUICK, engagement, 0.4 + p.aggression * 0.3 + noise());
+        this._scoreAttackOpportunity(fighter, AttackType.QUICK, engagement, 0.4 + p.aggression * 0.3 + (p.quickBias || 0) + noise());
       scores.thrustAttack = (scores.thrustAttack || 0) +
-        this._scoreAttackOpportunity(fighter, AttackType.THRUST, engagement, 0.2 + p.aggression * 0.2 + noise());
+        this._scoreAttackOpportunity(fighter, AttackType.THRUST, engagement, 0.2 + p.aggression * 0.2 + (p.thrustBias || 0) + noise());
 
       const blockRatio = this._getOpponentBlockRatio();
       const heavyBonus = blockRatio * p.heavyMixup;
       scores.heavyAttack = (scores.heavyAttack || 0) +
-        this._scoreAttackOpportunity(fighter, AttackType.HEAVY, engagement, 0.15 + p.aggression * 0.2 + heavyBonus + noise());
+        this._scoreAttackOpportunity(fighter, AttackType.HEAVY, engagement, 0.15 + p.aggression * 0.2 + heavyBonus + (p.heavyBias || 0) + noise());
 
       if (closeRange) {
-        scores.quickAttack += this._scoreAttackOpportunity(fighter, AttackType.QUICK, engagement, 0.2);
+        scores.quickAttack += this._scoreAttackOpportunity(fighter, AttackType.QUICK, engagement, 0.2 + (p.quickBias || 0));
       }
     }
 
     if (opponentAttacking) {
-      scores.block = 0.5 + noise();
-      scores.parry = p.parryRate + noise();
-      scores.sidestep = 0.3 + p.dodgeRate * 0.5 + noise();
+      scores.block = 0.5 + (p.blockBias || 0) + noise();
+      scores.parry = p.parryRate + (p.parryBias || 0) + noise();
+      scores.sidestep = 0.3 + p.dodgeRate * 0.5 + (p.sidestepBias || 0) + noise();
 
       if (!nearEdge) {
-        scores.backstep = 0.15 + p.dodgeRate * 0.3 + noise();
+        scores.backstep = 0.15 + p.dodgeRate * 0.3 + (p.backstepBias || 0) + noise();
       }
 
       if (badlyFlanked) {
@@ -195,26 +239,75 @@ export class AIController {
       }
     }
 
-    scores.sidestep = (scores.sidestep || 0) + 0.05 + noise();
+    scores.sidestep = (scores.sidestep || 0) - 0.06 + (p.sidestepBias || 0) + noise();
 
     if (!inRange) {
-      scores.moveForward = (scores.moveForward || 0) + 0.6 + p.aggression * 0.3 + noise();
+      scores.moveForward = (scores.moveForward || 0) + 0.6 + p.aggression * 0.3 + (p.moveForwardBias || 0) + noise();
     }
 
     if (closeRange && !nearEdge && !opponentVulnerable) {
       const backoffDesire = p.spacingAwareness * 0.4;
-      scores.moveBack = (scores.moveBack || 0) + backoffDesire + noise();
-      scores.sidestep = (scores.sidestep || 0) + backoffDesire * 0.5 + noise();
+      scores.moveBack = (scores.moveBack || 0) + backoffDesire + (p.moveBackBias || 0) + noise();
+      scores.sidestep = (scores.sidestep || 0) + backoffDesire * 0.5 + (p.sidestepBias || 0) + noise();
     } else if (closeRange && !nearEdge) {
-      scores.moveBack = (scores.moveBack || 0) + 0.1 + noise();
+      scores.moveBack = (scores.moveBack || 0) + 0.1 + (p.moveBackBias || 0) + noise();
     }
 
     if (offAngle) {
-      scores.sidestep = (scores.sidestep || 0) + 0.25 + p.spacingAwareness * 0.2;
-      scores.moveForward = (scores.moveForward || 0) + 0.15;
+      scores.sidestep = (scores.sidestep || 0) + 0.08 + p.spacingAwareness * 0.1 + (p.sidestepBias || 0);
+      scores.moveForward = (scores.moveForward || 0) + 0.15 + (p.moveForwardBias || 0);
       if (closeRange && !nearEdge) {
-        scores.moveBack = (scores.moveBack || 0) + 0.2;
+        scores.moveBack = (scores.moveBack || 0) + 0.28 + (p.moveBackBias || 0);
       }
+    }
+
+    if (badlyFlanked) {
+      scores.quickAttack = 0;
+      scores.heavyAttack = 0;
+      scores.thrustAttack = 0;
+      scores.sidestep = (scores.sidestep || 0) + 0.05;
+      scores.moveBack = (scores.moveBack || 0) + 0.35;
+      scores.moveForward = (scores.moveForward || 0) + 0.15;
+    }
+
+    if (recentOpponentSidestep) {
+      scores.quickAttack = (scores.quickAttack || 0) * 0.25;
+      scores.heavyAttack = (scores.heavyAttack || 0) * 0.2;
+      scores.thrustAttack = (scores.thrustAttack || 0) * 0.2;
+      scores.sidestep = (scores.sidestep || 0) + 0.05;
+      scores.moveBack = (scores.moveBack || 0) + 0.28;
+      scores.moveForward = (scores.moveForward || 0) + 0.12;
+      scores.backstep = (scores.backstep || 0) + 0.18;
+      scores.block = (scores.block || 0) * 0.6;
+    }
+
+    if (recentOwnWhiff) {
+      scores.quickAttack = (scores.quickAttack || 0) * 0.3;
+      scores.heavyAttack = (scores.heavyAttack || 0) * 0.2;
+      scores.thrustAttack = (scores.thrustAttack || 0) * 0.25;
+      scores.sidestep = (scores.sidestep || 0) + 0.03;
+      scores.moveBack = (scores.moveBack || 0) + 0.22;
+      scores.moveForward = (scores.moveForward || 0) + 0.08;
+      scores.idle = (scores.idle || 0) + 0.08;
+    }
+
+    if (repeatedSidestep) {
+      scores.sidestep = (scores.sidestep || 0) - 0.9;
+      scores.moveForward = (scores.moveForward || 0) + 0.12;
+      scores.moveBack = (scores.moveBack || 0) + 0.08;
+      scores.quickAttack = (scores.quickAttack || 0) + 0.06;
+    }
+
+    if (repeatedBackstep) {
+      scores.backstep = (scores.backstep || 0) - 0.55;
+      scores.sidestep = (scores.sidestep || 0) + 0.03;
+      scores.block = (scores.block || 0) + 0.05;
+    }
+
+    if (this._mobilityFatigue > 0) {
+      scores.sidestep = (scores.sidestep || 0) - this._mobilityFatigue * 0.28;
+      scores.backstep = (scores.backstep || 0) - this._mobilityFatigue * 0.2;
+      scores.moveForward = (scores.moveForward || 0) + this._mobilityFatigue * 0.06;
     }
 
     if (nearEdge) {
@@ -226,7 +319,7 @@ export class AIController {
       scores.moveForward = (scores.moveForward || 0) + 0.6;
     }
 
-    scores.idle = 0.1 + noise();
+    scores.idle = 0.1 + (p.idleBias || 0) + noise();
 
     let bestAction = 'idle';
     let bestScore = -Infinity;
@@ -353,6 +446,8 @@ export class AIController {
 
   getDebugSnapshot() {
     return {
+      profileName: this.profileName,
+      baseProfileName: this.baseProfileName,
       currentAction: this.currentAction,
       pendingAction: this.pendingAction,
       reactionFrames: this.personality.reactionFrames,
