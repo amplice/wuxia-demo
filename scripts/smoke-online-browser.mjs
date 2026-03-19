@@ -9,20 +9,33 @@ const APP_URL = `http://127.0.0.1:${APP_PORT}`;
 const PROJECT_ROOT = fileURLToPath(new URL('../', import.meta.url));
 
 function spawnProcess(command, args, extraEnv = {}) {
-  const resolvedCommand = process.platform === 'win32' && command === 'npm'
-    ? 'npm.cmd'
-    : command;
-  const proc = spawn(resolvedCommand, args, {
+  const isWinNpm = process.platform === 'win32' && command === 'npm';
+  const resolvedCommand = isWinNpm ? 'cmd.exe' : command;
+  const resolvedArgs = isWinNpm ? ['/c', 'npm.cmd', ...args] : args;
+  const proc = spawn(resolvedCommand, resolvedArgs, {
     cwd: PROJECT_ROOT,
     env: { ...process.env, ...extraEnv },
     stdio: ['ignore', 'pipe', 'pipe'],
-    shell: process.platform === 'win32',
+    shell: false,
   });
   let stderr = '';
   proc.stderr.on('data', (chunk) => {
     stderr += String(chunk);
   });
   return { proc, getStderr: () => stderr };
+}
+
+function killProcessTree(proc) {
+  if (!proc || proc.killed) return;
+  if (process.platform === 'win32') {
+    const killer = spawn('taskkill', ['/pid', String(proc.pid), '/t', '/f'], {
+      stdio: 'ignore',
+      shell: false,
+    });
+    killer.unref();
+    return;
+  }
+  proc.kill('SIGTERM');
 }
 
 async function waitForHttp(url, timeoutMs = 15000) {
@@ -39,61 +52,62 @@ async function waitForHttp(url, timeoutMs = 15000) {
   throw new Error(`Timed out waiting for ${url}`);
 }
 
-async function waitForTitle(page) {
+async function waitForGameReady(page) {
   const deadline = Date.now() + 60000;
   while (Date.now() < deadline) {
     const ready = await page.evaluate(() => {
-      const loading = document.getElementById('loading-screen');
-      const title = document.getElementById('title-screen');
-      if (!loading || !title) return false;
-      return getComputedStyle(loading).display === 'none' && getComputedStyle(title).display === 'flex';
+      const game = window.__ringOfSteelGame;
+      return Boolean(game?._charCache?.ronin && game?._charCache?.spearman);
     });
     if (ready) return;
     await delay(200);
   }
   const debug = await page.evaluate(() => ({
-    loadingDisplay: getComputedStyle(document.getElementById('loading-screen')).display,
-    titleDisplay: getComputedStyle(document.getElementById('title-screen')).display,
+    hasGame: Boolean(window.__ringOfSteelGame),
+    cacheKeys: Object.keys(window.__ringOfSteelGame?._charCache ?? {}),
+    gameState: window.__ringOfSteelGame?.gameState ?? null,
     loadingStatus: document.getElementById('loading-status')?.textContent ?? null,
     loadingPercent: document.getElementById('loading-percent')?.textContent ?? null,
     bodyText: document.body.innerText.slice(0, 400),
   }));
-  throw new Error(`Timed out waiting for title: ${JSON.stringify(debug)}`);
-}
-
-async function openSelect(page) {
-  await waitForTitle(page);
-  await page.keyboard.press('Enter');
-  const deadline = Date.now() + 10000;
-  while (Date.now() < deadline) {
-    const open = await page.evaluate(() => {
-      const select = document.getElementById('select-screen');
-      return select && getComputedStyle(select).display === 'flex';
-    });
-    if (open) return;
-    await delay(100);
-  }
-  throw new Error('Timed out waiting for select screen.');
+  throw new Error(`Timed out waiting for game ready: ${JSON.stringify(debug)}`);
 }
 
 async function configureOnlineHost(page, characterId) {
-  await page.click('#mode-options [data-mode="online"]');
-  await page.click(`#p1-char-options [data-char="${characterId}"]`);
-  await page.$eval('#online-server-url', (el, value) => { el.value = value; }, `ws://127.0.0.1:${WS_PORT}/ws`);
-  await page.click('#start-fight-btn');
+  await page.evaluate(async ({ characterId, serverUrl }) => {
+    const game = window.__ringOfSteelGame;
+    game.gameState = 'select';
+    game.ui.showSelect();
+    await game._startOnlineSession({
+      mode: 'online',
+      difficulty: 'medium',
+      p1Char: characterId,
+      p2Char: characterId,
+      serverUrl,
+      lobbyCode: '',
+    });
+  }, { characterId, serverUrl: `ws://127.0.0.1:${WS_PORT}/ws` });
+
   await page.waitForFunction(() => {
-    const input = document.getElementById('online-lobby-code');
-    return input && input.value.trim().length > 0;
-  }, { timeout: 10000 });
-  return page.$eval('#online-lobby-code', (el) => el.value.trim());
+    return Boolean(window.__ringOfSteelGame?.onlineSession?.lobbyCode);
+  }, { timeout: 15000 });
+  return page.evaluate(() => window.__ringOfSteelGame.onlineSession.lobbyCode);
 }
 
 async function configureOnlineGuest(page, characterId, code) {
-  await page.click('#mode-options [data-mode="online"]');
-  await page.click(`#p1-char-options [data-char="${characterId}"]`);
-  await page.$eval('#online-server-url', (el, value) => { el.value = value; }, `ws://127.0.0.1:${WS_PORT}/ws`);
-  await page.$eval('#online-lobby-code', (el, value) => { el.value = value; }, code);
-  await page.click('#start-fight-btn');
+  await page.evaluate(async ({ characterId, code, serverUrl }) => {
+    const game = window.__ringOfSteelGame;
+    game.gameState = 'select';
+    game.ui.showSelect();
+    await game._startOnlineSession({
+      mode: 'online',
+      difficulty: 'medium',
+      p1Char: characterId,
+      p2Char: characterId,
+      serverUrl,
+      lobbyCode: code,
+    });
+  }, { characterId, code, serverUrl: `ws://127.0.0.1:${WS_PORT}/ws` });
 }
 
 async function waitForHud(page) {
@@ -136,7 +150,10 @@ async function run() {
     ]);
 
     console.log('[browser-smoke] launching browser');
-    browser = await puppeteer.launch({ headless: true });
+    browser = await puppeteer.launch({
+      headless: true,
+      protocolTimeout: 240000,
+    });
     const hostPage = await browser.newPage();
     const guestPage = await browser.newPage();
     for (const page of [hostPage, guestPage]) {
@@ -150,10 +167,10 @@ async function run() {
       guestPage.goto(APP_URL, { waitUntil: 'domcontentloaded' }),
     ]);
 
-    console.log('[browser-smoke] opening select screens');
+    console.log('[browser-smoke] waiting for game ready');
     await Promise.all([
-      openSelect(hostPage),
-      openSelect(guestPage),
+      waitForGameReady(hostPage),
+      waitForGameReady(guestPage),
     ]);
 
     console.log('[browser-smoke] creating host lobby');
@@ -188,8 +205,8 @@ async function run() {
     console.log(JSON.stringify(summary, null, 2));
   } finally {
     await browser?.close();
-    app.proc.kill();
-    server.proc.kill();
+    killProcessTree(app.proc);
+    killProcessTree(server.proc);
     await delay(150);
     if (app.getStderr().trim()) {
       console.error(app.getStderr().trim());

@@ -229,6 +229,8 @@ export class Game {
   }
 
   async _startOnlineSession(config) {
+    this.mode = 'online';
+    this.difficulty = config.difficulty ?? this.difficulty;
     const requestedUrl = config.serverUrl || undefined;
     const requestedCode = config.lobbyCode || '';
 

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { FighterStateMachine } from '../combat/FighterStateMachine.js';
 import { DamageSystem } from '../combat/DamageSystem.js';
 import { getAttackData } from '../combat/AttackData.js';
+import { AUTHORITATIVE_TRACKS } from '../data/authoritativeTracks.js';
 import {
   BODY_COLLISION,
   FACING_TUNING,
@@ -31,6 +32,8 @@ const _selfBodyPosition = new THREE.Vector3();
 const _opponentBodyPosition = new THREE.Vector3();
 const _weaponBase = new THREE.Vector3();
 const _weaponTip = new THREE.Vector3();
+const _sampledBase = new THREE.Vector3();
+const _sampledTip = new THREE.Vector3();
 
 const SIM_ATTACK_FRAMES = Object.freeze({
   spearman: Object.freeze({
@@ -133,6 +136,7 @@ export class FighterSim {
     this._baseWorldPosition = new THREE.Vector3();
     this._baseVelocity = new THREE.Vector3();
     this._tipMotionInitialized = false;
+    this.authoritativeTracks = AUTHORITATIVE_TRACKS.characters?.[charId] ?? null;
 
     this.resetForRound(playerIndex === 0 ? -2.5 : 2.5);
   }
@@ -296,7 +300,7 @@ export class FighterSim {
   }
 
   attack(type) {
-    const frames = SIM_ATTACK_FRAMES[this.charId]?.[type] ?? 30;
+    const frames = this._getAttackFrameCount(type);
     return this.fsm.startAttack(type, frames);
   }
 
@@ -509,6 +513,10 @@ export class FighterSim {
   }
 
   _computeWeaponPose(baseTarget, tipTarget) {
+    if (this._applyAuthoritativeWeaponPose(baseTarget, tipTarget)) {
+      return;
+    }
+
     const yaw = this.group.rotation.y;
     const stats = WEAPON_STATS[this.weaponType];
     const attackType = this.currentAttackType || AttackType.QUICK;
@@ -572,5 +580,61 @@ export class FighterSim {
     const recoverySpan = Math.max(1 - contactEnd, 1e-3);
     const t = (progress - contactEnd) / recoverySpan;
     return lerp(1, recoveryEnd, easeInOutQuad(t));
+  }
+
+  _getAttackFrameCount(attackType) {
+    const clipName = this._getAttackClipName(attackType);
+    const authoritativeClip = clipName ? this.authoritativeTracks?.clips?.[clipName] : null;
+    if (authoritativeClip?.frameCount) {
+      return authoritativeClip.frameCount;
+    }
+    return SIM_ATTACK_FRAMES[this.charId]?.[attackType] ?? 30;
+  }
+
+  _getAttackClipName(attackType = this.currentAttackType) {
+    if (attackType === AttackType.HEAVY) return 'attack_heavy';
+    if (attackType === AttackType.THRUST) return 'attack_thrust';
+    return 'attack_quick';
+  }
+
+  _getSampledWeaponClip() {
+    if (!this.authoritativeTracks?.clips) return null;
+    if (this.fsm.isAttacking) {
+      return this.authoritativeTracks.clips[this._getAttackClipName()];
+    }
+    return this.authoritativeTracks.clips.idle ?? null;
+  }
+
+  _applyAuthoritativeWeaponPose(baseTarget, tipTarget) {
+    const clip = this._getSampledWeaponClip();
+    if (!clip?.frames?.length) return false;
+
+    const frameCount = clip.frames.length;
+    const frameIndex = this.fsm.isAttacking
+      ? THREE.MathUtils.clamp(this.stateFrames - 1, 0, frameCount - 1)
+      : Math.floor((this.walkPhase * 60) % frameCount);
+    const frame = clip.frames[frameIndex];
+    if (!frame) return false;
+
+    _sampledBase.fromArray(frame.base);
+    _sampledTip.fromArray(frame.tip);
+    this._localToWorld(_sampledBase, baseTarget);
+    this._localToWorld(_sampledTip, tipTarget);
+    return true;
+  }
+
+  _localToWorld(localPoint, target) {
+    const yaw = this.group.rotation.y;
+    const sinYaw = Math.sin(yaw);
+    const cosYaw = Math.cos(yaw);
+    const x = localPoint.x;
+    const y = localPoint.y;
+    const z = localPoint.z;
+    target.set(
+      this.position.x + (x * cosYaw) + (z * sinYaw),
+      this.position.y + y,
+      this.position.z - (x * sinYaw) + (z * cosYaw),
+    );
+    return target;
   }
 }
