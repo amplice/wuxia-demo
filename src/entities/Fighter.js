@@ -327,65 +327,6 @@ export class Fighter extends FighterCore {
     this._baseWorldPosition.copy(base);
   }
 
-  applyMovementInput(direction, opponent, dt) {
-    if (!opponent) return false;
-    if (this.state === FighterState.DEAD || this.state === FighterState.DYING) return false;
-
-    this.getBodyCollisionPosition(_selfBodyPosition);
-    opponent.getBodyCollisionPosition(_opponentBodyPosition);
-    const dx = _opponentBodyPosition.x - _selfBodyPosition.x;
-    const dz = _opponentBodyPosition.z - _selfBodyPosition.z;
-    const dist = Math.sqrt(dx * dx + dz * dz) || 0.01;
-    const nx = dx / dist;
-    const nz = dz / dist;
-    const desiredDirection = Math.sign(direction);
-
-    let isMoving = false;
-
-    if (this._stepping) {
-      const stepDistance = this.charDef.stepDistance ?? STEP_DISTANCE;
-      const stepFrames = this.charDef.stepFrames ?? STEP_FRAMES;
-      const stepSpeed = stepDistance / stepFrames * 60;
-      this.position.x += nx * this._stepDirection * stepSpeed * dt;
-      this.position.z += nz * this._stepDirection * stepSpeed * dt;
-      this._stepFrames++;
-      isMoving = true;
-
-      if (this._stepFrames >= stepFrames) {
-        this._stepping = false;
-        this._stepFrames = 0;
-        this._stepCooldown = STEP_COOLDOWN_FRAMES;
-      }
-    }
-
-    if (this._stepCooldown > 0) {
-      this._stepCooldown--;
-    }
-
-    if (
-      !this._stepping &&
-      this._stepCooldown > 0 &&
-      this.charDef.idleDuringStepCooldown &&
-      this.fsm.isActionable
-    ) {
-      this.stopMoving();
-    }
-
-    if (!this._stepping && desiredDirection !== 0 && this._stepCooldown <= 0 && this.fsm.isActionable) {
-      this._stepping = true;
-      this._stepFrames = 0;
-      this._stepDirection = desiredDirection;
-      this.fsm.transition(desiredDirection > 0 ? FighterState.WALK_FORWARD : FighterState.WALK_BACK);
-      isMoving = true;
-    }
-
-    if (!isMoving && !this._stepping && this._stepCooldown <= 0 && this.fsm.isActionable) {
-      this.stopMoving();
-    }
-
-    return isMoving;
-  }
-
   _updateClipAnimation() {
     const state = this.state;
     let clipName = 'idle';
@@ -545,22 +486,7 @@ export class Fighter extends FighterCore {
     this._updateTrail();
   }
 
-  sidestep(direction) {
-    return this.fsm.startSidestep(direction);
-  }
-
-  backstep() {
-    return this.fsm.startBackstep();
-  }
-
-  stopMoving() {
-    if (this.state === FighterState.WALK_FORWARD ||
-        this.state === FighterState.WALK_BACK) {
-      this.fsm.transition(FighterState.IDLE);
-    }
-  }
-
-  attack(type) {
+  _getAttackFrameCount(type) {
     let clipName;
     if (type === AttackType.THRUST) {
       clipName = this.clipActions.attack_thrust ? 'attack_thrust' : 'attack';
@@ -580,92 +506,7 @@ export class Fighter extends FighterCore {
       attackFrames = Math.max(1, Math.ceil(clipDuration * 60));
     }
 
-    return this.fsm.startAttack(type, attackFrames);
-  }
-
-  block() {
-    return this.fsm.startBlock();
-  }
-
-  parry() {
-    return this.fsm.startParry();
-  }
-
-  distanceTo(other) {
-    this.getBodyCollisionPosition(_selfBodyPosition);
-    other.getBodyCollisionPosition(_opponentBodyPosition);
-    return distance2D(
-      _selfBodyPosition.x, _selfBodyPosition.z,
-      _opponentBodyPosition.x, _opponentBodyPosition.z
-    );
-  }
-
-  getDebugSnapshot(opponent = null) {
-    let tipRelativeToward = 0;
-    const weaponTip = this.getWeaponTipWorldPosition(new THREE.Vector3());
-    const weaponBase = this.getWeaponBaseWorldPosition(new THREE.Vector3());
-    const bodyRadius = getBodyRadius(this.charDef);
-    const hurtCenter = this.getHurtCenterWorldPosition(new THREE.Vector3());
-    const bodyCollision = this.getBodyCollisionPosition(new THREE.Vector3());
-    if (opponent) {
-      opponent.getHurtCenterWorldPosition(_debugOpponentCenter);
-      tipRelativeToward = this.getTipRelativeVelocityToward(_debugOpponentCenter);
-    }
-
-    return {
-      charName: this.charDef.displayName || 'Unknown',
-      weaponType: this.weaponType,
-      state: this.state,
-      stateFrames: this.stateFrames,
-      attackType: this.currentAttackType,
-      activeClip: this.activeClipName,
-      hitApplied: this.hitApplied,
-      position: {
-        x: this.position.x,
-        y: this.position.y,
-        z: this.position.z,
-      },
-      rotationY: this.group.rotation.y,
-      facingRight: this.facingRight,
-      stepping: this._stepping,
-      stepDirection: this._stepDirection,
-      stepFrames: this._stepFrames,
-      stepCooldown: this._stepCooldown,
-      actionable: this.fsm.isActionable,
-      attacking: this.fsm.isAttacking,
-      sidestepPhase: this.fsm.sidestepPhase,
-      dead: this.damageSystem.isDead(),
-      tipSpeed: this._tipVelocity.length(),
-      baseSpeed: this._baseVelocity.length(),
-      tipRelativeToward,
-      tipRelativeForward: this.getTipRelativeForwardSpeed(),
-      tipRelativeSpeed: this.getTipRelativeSpeed(),
-      weaponBase: {
-        x: weaponBase.x,
-        y: weaponBase.y,
-        z: weaponBase.z,
-      },
-      weaponTip: {
-        x: weaponTip.x,
-        y: weaponTip.y,
-        z: weaponTip.z,
-      },
-      bodyCollision: {
-        x: bodyCollision.x,
-        y: bodyCollision.y,
-        z: bodyCollision.z,
-      },
-      hurtCenter: {
-        x: hurtCenter.x,
-        y: hurtCenter.y,
-        z: hurtCenter.z,
-      },
-      weaponClashRadius: this.charDef.weaponClashRadius ?? getDefaultWeaponClashRadius(this.weaponType),
-      hurtRadius: this._debugCollision?.hurtRadius ?? HURT_CYLINDER.radius,
-      hurtHeight: this._debugCollision?.hurtHeight ?? HURT_CYLINDER.height,
-      bodyRadius,
-      collision: this._debugCollision ? { ...this._debugCollision } : null,
-    };
+    return attackFrames;
   }
 
   startRagdoll(dirX, dirZ) {
