@@ -100,6 +100,8 @@ export class Game {
       this._disconnectOnlineSession();
       this.gameState = GameState.SELECT;
       this.ui.showSelect();
+      this.ui.select.resetOnlineState();
+      this.ui.select.setOnlineStatus('Leave lobby code empty to host a room. Enter a code to join an existing room, then press ready.');
     };
 
     this.ui.title.onAnimPlayer = async () => {
@@ -114,6 +116,14 @@ export class Game {
         return;
       }
       this._startMatch(config.p1Char, config.p2Char);
+    };
+    this.ui.select.onLeaveOnline = () => {
+      this._disconnectOnlineSession();
+      this._cleanupFighters();
+      this.gameState = GameState.SELECT;
+      this.ui.showSelect();
+      this.ui.select.resetOnlineState();
+      this.ui.select.setOnlineStatus('Disconnected. Leave lobby code empty to host a room, or enter a code to join.');
     };
 
     this.ui.victory.onContinue = () => {
@@ -168,6 +178,7 @@ export class Game {
 
     this.ui.showHUD();
     this.ui.hud.updateRoundPips(0, 0);
+    this.ui.hud.setOnlineMeta({ visible: false });
     this._startRound();
   }
 
@@ -250,6 +261,8 @@ export class Game {
     }
 
     this._disconnectOnlineSession();
+      this.ui.select.setOnlineBusy(true);
+      this.ui.select.setOnlineLocked(false);
       this._cleanupFighters();
       this.aiController = null;
       this.matchSim = null;
@@ -276,11 +289,15 @@ export class Game {
         await session.createLobby(config.p1Char);
       }
       session.setReady(true);
+      this.ui.select.setOnlineBusy(false);
+      this.ui.select.setOnlineLocked(true);
       this.ui.select.setOnlineStatus(
-        requestedCode ? 'JOINED LOBBY. WAITING FOR HOST...' : 'LOBBY CREATED. WAITING FOR OPPONENT...'
+        requestedCode ? 'JOINED LOBBY. WAITING FOR HOST...' : 'LOBBY CREATED. SHARE THE CODE AND WAIT FOR OPPONENT...'
       );
     } catch (err) {
       console.error('Online session failed to start:', err);
+      this.ui.select.setOnlineBusy(false);
+      this.ui.select.setOnlineLocked(false);
       this.ui.select.setOnlineStatus(`CONNECTION FAILED: ${err?.message || 'UNKNOWN ERROR'}`);
       this._disconnectOnlineSession();
     }
@@ -291,6 +308,7 @@ export class Game {
       const detail = event.detail;
       const message = detail?.message || detail?.error?.message || 'NETWORK ERROR';
       console.error('Online session error:', detail);
+      this.ui.select.setOnlineBusy(false);
       this.ui.select.setOnlineStatus(`ERROR: ${String(message).toUpperCase()}`);
     });
 
@@ -331,12 +349,25 @@ export class Game {
 
     const connectedPlayers = detail.players?.filter((player) => player.connected).length ?? 0;
     const readyPlayers = detail.players?.filter((player) => player.connected && player.ready).length ?? 0;
+
+    if (
+      this.mode === 'online' &&
+      this.gameState !== GameState.SELECT &&
+      detail.phase !== 'match_running' &&
+      connectedPlayers < 2
+    ) {
+      this._handleOnlineDisconnect('OPPONENT DISCONNECTED.');
+      return;
+    }
+
+    this.ui.select.setOnlineBusy(false);
+    this.ui.select.setOnlineLocked(Boolean(detail.code));
     if (detail.phase === 'match_running') {
       this.ui.select.setOnlineStatus('MATCH STARTING...');
     } else if (connectedPlayers < 2) {
       this.ui.select.setOnlineStatus(`LOBBY ${detail.code}. WAITING FOR OPPONENT...`);
     } else if (readyPlayers < 2) {
-      this.ui.select.setOnlineStatus(`LOBBY ${detail.code}. ${readyPlayers}/2 READY.`);
+      this.ui.select.setOnlineStatus(`LOBBY ${detail.code}. ${readyPlayers}/2 READY. PRESS READY WHEN YOU'RE SET.`);
     } else {
       this.ui.select.setOnlineStatus(`LOBBY ${detail.code}. SYNCING MATCH...`);
     }
@@ -380,6 +411,11 @@ export class Game {
     this.ui.showHUD();
     this.ui.hud.reset();
     this.ui.hud.updateRoundPips(this.p1Score, this.p2Score);
+    this.ui.hud.setOnlineMeta({
+      visible: true,
+      status: this.onlineLocalSlot === 0 ? 'ONLINE P1' : 'ONLINE P2',
+      code: this.onlineSession?.lobbyCode ?? '------',
+    });
     this.input.clearBuffers();
 
     if (snapshot) {
@@ -430,6 +466,9 @@ export class Game {
     this.onlineLocalSlot = null;
     this.onlineMatchPlayers = null;
     this.onlinePendingMatchResult = null;
+    this.ui.select.setOnlineBusy(false);
+    this.ui.select.setOnlineLocked(false);
+    this.ui.hud.setOnlineMeta({ visible: false });
   }
 
   _handleOnlineDisconnect(message) {
@@ -439,7 +478,9 @@ export class Game {
     this.aiController = null;
     this.gameState = GameState.SELECT;
     this.ui.showSelect();
+    this.ui.select.resetOnlineState();
     this.ui.select.setOnlineStatus(message);
+    this.ui.hud.setOnlineMeta({ visible: false });
     this.onlineSession = null;
     this.onlineLocalSlot = null;
     this.onlineMatchPlayers = null;

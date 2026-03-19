@@ -37,6 +37,12 @@ export const FACING_TUNING = Object.freeze({
   postAttackTurnMaxDuration: 0.35,
 });
 
+export const REMOTE_VIEW_TUNING = Object.freeze({
+  positionBlendSpeed: 14,
+  rotationBlendSpeed: 12,
+  snapDistance: 1.25,
+});
+
 export const DEFAULT_WEAPON_TUNING = Object.freeze({
   [WeaponType.SPEAR]: Object.freeze({
     hitRadius: 0.02,

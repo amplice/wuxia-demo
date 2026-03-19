@@ -5,14 +5,17 @@ import { getAttackData } from '../combat/AttackData.js';
 import { FighterCore } from '../combat/FighterCore.js';
 import {
   BODY_COLLISION,
+  REMOTE_VIEW_TUNING,
   WEAPON_FALLBACKS,
 } from '../combat/CombatTuning.js';
 import { TrailEffect } from '../animation/TrailEffect.js';
+import { moveAngleTowards } from '../utils/MathUtils.js';
 import {
   FighterState, AttackType, WeaponType,
 } from '../core/Constants.js';
 
 const _markerBodyPosition = new THREE.Vector3();
+const _remoteTargetPosition = new THREE.Vector3();
 
 export class Fighter extends FighterCore {
   static _playerMarkerTexture = null;
@@ -68,6 +71,9 @@ export class Fighter extends FighterCore {
 
     // Ragdoll state
     this._ragdoll = null;
+    this._remoteTargetPosition = new THREE.Vector3();
+    this._remoteTargetRotationY = this.group.rotation.y;
+    this._hasRemoteTarget = false;
 
     this._setImmediateIdlePose();
     this._updatePlayerMarker();
@@ -433,10 +439,29 @@ export class Fighter extends FighterCore {
 
     this._updatePlayerMarker();
     this._updateTipMotion();
+    this._hasRemoteTarget = false;
+    this._remoteTargetPosition.copy(this.position);
+    this._remoteTargetRotationY = this.group.rotation.y;
   }
 
   applyAuthoritativeSnapshot(snapshot) {
-    this._applySnapshotCore(snapshot, (attackType) => getAttackData(attackType, this.weaponType));
+    if (snapshot?.position) {
+      this._remoteTargetPosition.set(
+        snapshot.position.x ?? this.position.x,
+        snapshot.position.y ?? this.position.y,
+        snapshot.position.z ?? this.position.z,
+      );
+      this._remoteTargetRotationY = snapshot.rotationY ?? this.group.rotation.y;
+      if (!this._hasRemoteTarget) {
+        this.position.copy(this._remoteTargetPosition);
+        this.group.rotation.y = this._remoteTargetRotationY;
+        this._hasRemoteTarget = true;
+      }
+    }
+
+    this._applySnapshotCore(snapshot, (attackType) => getAttackData(attackType, this.weaponType), {
+      applyTransform: false,
+    });
 
     this._updatePlayerMarker();
     this.syncStatePresentation();
@@ -456,6 +481,21 @@ export class Fighter extends FighterCore {
     if (this._ragdoll) {
       this._updateRagdoll(dt);
       return;
+    }
+
+    if (this._hasRemoteTarget) {
+      _remoteTargetPosition.copy(this._remoteTargetPosition).sub(this.position);
+      if (_remoteTargetPosition.length() > REMOTE_VIEW_TUNING.snapDistance) {
+        this.position.copy(this._remoteTargetPosition);
+      } else {
+        const blend = 1 - Math.exp(-REMOTE_VIEW_TUNING.positionBlendSpeed * dt);
+        this.position.lerp(this._remoteTargetPosition, blend);
+      }
+      this.group.rotation.y = moveAngleTowards(
+        this.group.rotation.y,
+        this._remoteTargetRotationY,
+        REMOTE_VIEW_TUNING.rotationBlendSpeed * dt,
+      );
     }
 
     if (this.mixer) {

@@ -393,15 +393,18 @@ export class FighterCore {
     this._baseVelocity.set(0, 0, 0);
   }
 
-  _applySnapshotCore(snapshot, getAttackDataForType = null) {
+  _applySnapshotCore(snapshot, getAttackDataForType = null, options = {}) {
     if (!snapshot) return;
+    const { applyTransform = true } = options;
 
-    this.position.set(
-      snapshot.position?.x ?? this.position.x,
-      snapshot.position?.y ?? this.position.y,
-      snapshot.position?.z ?? this.position.z,
-    );
-    this.group.rotation.y = snapshot.rotationY ?? this.group.rotation.y;
+    if (applyTransform) {
+      this.position.set(
+        snapshot.position?.x ?? this.position.x,
+        snapshot.position?.y ?? this.position.y,
+        snapshot.position?.z ?? this.position.z,
+      );
+      this.group.rotation.y = snapshot.rotationY ?? this.group.rotation.y;
+    }
     this.facingRight = snapshot.facingRight ?? this.facingRight;
 
     this.fsm.state = snapshot.state ?? this.fsm.state;

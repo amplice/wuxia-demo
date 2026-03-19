@@ -6,6 +6,9 @@ export class HUD {
     this.roundAnnounce = document.getElementById('round-announce');
     this.roundText = this.roundAnnounce.querySelector('.round-text');
     this.fightText = this.roundAnnounce.querySelector('.fight-text');
+    this.onlineStrip = document.getElementById('online-hud-strip');
+    this.onlineStatus = document.getElementById('online-hud-status');
+    this.onlineCode = document.getElementById('online-hud-code');
   }
 
   show() {
@@ -20,6 +23,13 @@ export class HUD {
 
   hide() {
     this.el.style.display = 'none';
+  }
+
+  setOnlineMeta({ visible = false, status = 'Offline', code = '------' } = {}) {
+    if (!this.onlineStrip || !this.onlineStatus || !this.onlineCode) return;
+    this.onlineStrip.style.display = visible ? 'flex' : 'none';
+    this.onlineStatus.textContent = status;
+    this.onlineCode.textContent = code || '------';
   }
 
   updateRoundPips(p1Wins, p2Wins) {
@@ -54,5 +64,6 @@ export class HUD {
 
   reset() {
     this.hideRoundAnnounce();
+    this.setOnlineMeta({ visible: false });
   }
 }

@@ -11,6 +11,7 @@
     "multiplayer:server": "node server/multiplayer-server.mjs",
     "multiplayer:smoke": "node scripts/smoke-multiplayer.mjs",
     "multiplayer:browser-smoke": "node scripts/smoke-online-browser.mjs",
+    "multiplayer:disconnect-smoke": "node scripts/smoke-online-disconnect.mjs",
     "generate:authoritative-tracks": "node scripts/generate-authoritative-tracks.mjs",
     "multiplayer:parity": "node scripts/check-fighter-parity.mjs"
   },

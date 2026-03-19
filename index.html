@@ -287,6 +287,13 @@
         inset 0 0 0 1px rgba(255,255,255,0.04);
       border-color: rgba(255, 224, 167, 0.52);
     }
+    .select-btn:disabled {
+      cursor: default;
+      opacity: 0.55;
+      box-shadow: var(--ui-shadow);
+      border-color: rgba(255, 225, 171, 0.2);
+      background: linear-gradient(180deg, rgba(24, 22, 26, 0.92), rgba(12, 13, 18, 0.96));
+    }
     .select-section {
       position: relative;
       z-index: 1;
@@ -331,6 +338,12 @@
       grid-template-columns: repeat(2, minmax(220px, 1fr));
       gap: 14px;
       width: min(920px, 94vw);
+    }
+    .online-actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 14px;
     }
     .online-field {
       display: flex;
@@ -515,6 +528,30 @@
       top: 0; left: 0;
       width: 100%; height: 100%;
       display: none;
+    }
+    .online-hud-strip {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 14px;
+      background: linear-gradient(180deg, rgba(18, 23, 34, 0.9), rgba(8, 11, 18, 0.94));
+      border: 1px solid rgba(120, 164, 255, 0.26);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+      color: #d8e4ff;
+      font-family: 'MS UI Gothic', 'Yu Gothic', sans-serif;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .online-hud-strip .label {
+      color: var(--ui-gold-dim);
+    }
+    .online-hud-strip .value {
+      color: #ffffff;
     }
     .fighter-hud {
       position: absolute;
@@ -894,12 +931,15 @@
         <div class="online-fields">
           <div class="online-field">
             <label for="online-server-url">Server URL</label>
-            <input class="text-input" id="online-server-url" type="text" value="ws://127.0.0.1:3010/ws" />
+            <input class="text-input" id="online-server-url" type="text" value="" />
           </div>
           <div class="online-field">
             <label for="online-lobby-code">Lobby Code</label>
             <input class="text-input" id="online-lobby-code" type="text" placeholder="Leave empty to host" />
           </div>
+        </div>
+        <div class="online-actions">
+          <button class="select-btn" id="online-leave-btn" style="display: none;">LEAVE LOBBY</button>
         </div>
         <div class="status-note">Leave lobby code empty to host a room. Enter a code to join an existing room, then press ready.</div>
       </div>
@@ -959,6 +999,12 @@
 
     <!-- HUD -->
     <div id="hud">
+      <div class="online-hud-strip" id="online-hud-strip">
+        <span class="label">Mode</span>
+        <span class="value" id="online-hud-status">Offline</span>
+        <span class="label">Lobby</span>
+        <span class="value" id="online-hud-code">------</span>
+      </div>
       <div class="fighter-hud p1">
         <div class="fighter-name">PLAYER 1</div>
         <div class="round-pips" id="p1-pips"></div>

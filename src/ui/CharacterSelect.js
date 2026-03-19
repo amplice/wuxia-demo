@@ -1,4 +1,5 @@
 import { CHARACTER_DEFS, DEFAULT_CHAR } from '../entities/CharacterDefs.js';
+import { getDefaultMultiplayerWsUrl } from '../net/NetConfig.js';
 
 export class CharacterSelect {
   constructor() {
@@ -14,6 +15,7 @@ export class CharacterSelect {
     this.onlineServerUrl = document.getElementById('online-server-url');
     this.onlineLobbyCode = document.getElementById('online-lobby-code');
     this.onlineStatusNote = this.onlineSection?.querySelector('.status-note') ?? null;
+    this.onlineLeaveBtn = document.getElementById('online-leave-btn');
     this.p1Container = document.getElementById('p1-char-options');
     this.p2Container = document.getElementById('p2-char-options');
     this.p2Heading = document.getElementById('p2-char-heading');
@@ -23,6 +25,13 @@ export class CharacterSelect {
     this.controlsModal = document.getElementById('controls-modal');
     this.controlsCloseBtn = document.getElementById('controls-close-btn');
     this._keyHandler = this._onKey.bind(this);
+    this._onlineBusy = false;
+    this._onlineLocked = false;
+    this.onLeaveOnline = null;
+
+    if (this.onlineServerUrl && !this.onlineServerUrl.value) {
+      this.onlineServerUrl.value = getDefaultMultiplayerWsUrl();
+    }
 
     this._setupButtons();
     this._buildCharButtons();
@@ -51,6 +60,7 @@ export class CharacterSelect {
 
     // Start button
     document.getElementById('start-fight-btn').addEventListener('click', () => {
+      if (this._onlineBusy) return;
       if (this.onConfirm) {
         this.onConfirm({
           mode: this.mode,
@@ -62,6 +72,15 @@ export class CharacterSelect {
         });
       }
     });
+
+    if (this.onlineLobbyCode) {
+      this.onlineLobbyCode.addEventListener('input', () => this._updateStartButton());
+    }
+    if (this.onlineLeaveBtn) {
+      this.onlineLeaveBtn.addEventListener('click', () => {
+        if (this.onLeaveOnline) this.onLeaveOnline();
+      });
+    }
 
     if (this.controlsBtn) {
       this.controlsBtn.addEventListener('click', () => this._setControlsOpen(true));
@@ -140,21 +159,76 @@ export class CharacterSelect {
       this.p2Column.style.display = this.mode === 'online' ? 'none' : '';
     }
     if (this.startBtn) {
-      this.startBtn.textContent = this.mode === 'online' ? 'READY' : 'FIGHT';
+      this._updateStartButton();
     }
     this._updateOpponentLabel();
+  }
+
+  _updateStartButton() {
+    if (!this.startBtn) return;
+    if (this.mode !== 'online') {
+      this.startBtn.textContent = 'FIGHT';
+      this.startBtn.disabled = false;
+      if (this.onlineLeaveBtn) this.onlineLeaveBtn.style.display = 'none';
+      return;
+    }
+
+    if (this._onlineBusy) {
+      this.startBtn.textContent = 'CONNECTING...';
+      this.startBtn.disabled = true;
+      if (this.onlineLeaveBtn) {
+        this.onlineLeaveBtn.style.display = this._onlineLocked ? '' : 'none';
+        this.onlineLeaveBtn.disabled = true;
+      }
+      return;
+    }
+
+    const lobbyCode = this.onlineLobbyCode?.value?.trim() ?? '';
+    if (this._onlineLocked) {
+      this.startBtn.textContent = 'READY';
+    } else if (lobbyCode) {
+      this.startBtn.textContent = 'JOIN';
+    } else {
+      this.startBtn.textContent = 'HOST';
+    }
+    this.startBtn.disabled = false;
+    if (this.onlineLeaveBtn) {
+      this.onlineLeaveBtn.style.display = this._onlineLocked ? '' : 'none';
+      this.onlineLeaveBtn.disabled = false;
+    }
   }
 
   setOnlineLobbyCode(code = '') {
     if (this.onlineLobbyCode) {
       this.onlineLobbyCode.value = code;
     }
+    this._updateStartButton();
   }
 
   setOnlineStatus(message) {
     if (this.onlineStatusNote) {
       this.onlineStatusNote.textContent = message;
     }
+  }
+
+  setOnlineBusy(busy) {
+    this._onlineBusy = Boolean(busy);
+    this._updateStartButton();
+  }
+
+  setOnlineLocked(locked) {
+    this._onlineLocked = Boolean(locked);
+    if (this.onlineServerUrl) this.onlineServerUrl.readOnly = this._onlineLocked;
+    if (this.onlineLobbyCode) this.onlineLobbyCode.readOnly = this._onlineLocked;
+    this._updateStartButton();
+  }
+
+  resetOnlineState() {
+    this._onlineBusy = false;
+    this._onlineLocked = false;
+    if (this.onlineServerUrl) this.onlineServerUrl.readOnly = false;
+    if (this.onlineLobbyCode) this.onlineLobbyCode.readOnly = false;
+    this._updateStartButton();
   }
 
   show() {
