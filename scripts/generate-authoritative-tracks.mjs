@@ -88,6 +88,14 @@ async function main() {
 
       const sampleClips = [
         'idle',
+        'walk_forward',
+        'walk_backward',
+        'strafe_left',
+        'strafe_right',
+        'backstep',
+        'block_parry',
+        'block_knockback',
+        'clash_knockback',
         'attack_quick',
         'attack_heavy',
         'attack_thrust',
@@ -102,6 +110,19 @@ async function main() {
           round(matrix[14] - root.position.z),
         ];
       };
+      const readBodyAnchorOffset = (joints, root) => {
+        if (joints.bodyAnchorLocalOffset) {
+          return [
+            round(joints.bodyAnchorLocalOffset.x),
+            round(joints.bodyAnchorLocalOffset.y),
+            round(joints.bodyAnchorLocalOffset.z),
+          ];
+        }
+        if (joints.bodyAnchor) {
+          return readWorldOffset(joints.bodyAnchor, root);
+        }
+        return null;
+      };
 
       const result = {
         generatedAt: new Date().toISOString(),
@@ -112,9 +133,7 @@ async function main() {
       for (const [charId, animData] of Object.entries(game._charCache)) {
         const fighter = ModelLoader.createFighterFromGLB(animData.model, animData.clips, animData.texture);
         const { root, joints, mixer, actions } = fighter;
-        const bodyAnchorOffset = joints.bodyAnchor
-          ? readWorldOffset(joints.bodyAnchor, root)
-          : null;
+        const bodyAnchorOffset = readBodyAnchorOffset(joints, root);
         const baseTarget = joints.weaponBase || joints.handR || joints.handL;
         const tipTarget = joints.weaponTip || joints.spearTip;
 
@@ -150,6 +169,7 @@ async function main() {
             frames.push({
               frame,
               time: round(time),
+              body: readBodyAnchorOffset(joints, root) ?? bodyAnchorOffset,
               base: readWorldOffset(baseTarget, root),
               tip: readWorldOffset(tipTarget, root),
             });

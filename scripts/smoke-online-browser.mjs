@@ -3,8 +3,9 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
 
-const APP_PORT = Number(process.env.APP_PORT || (4174 + (process.pid % 200)));
-const WS_PORT = Number(process.env.MULTIPLAYER_PORT || (3132 + (process.pid % 200)));
+const randomOffset = Math.floor(Math.random() * 1000);
+const APP_PORT = Number(process.env.APP_PORT || (4200 + randomOffset));
+const WS_PORT = Number(process.env.MULTIPLAYER_PORT || (3200 + randomOffset));
 const APP_URL = `http://127.0.0.1:${APP_PORT}`;
 const PROJECT_ROOT = fileURLToPath(new URL('../', import.meta.url));
 
@@ -131,10 +132,51 @@ async function readGameState(page) {
       state: game?.gameState,
       hasFighter1: Boolean(game?.fighter1),
       hasFighter2: Boolean(game?.fighter2),
+      fighter1State: game?.fighter1?.state ?? null,
+      fighter2State: game?.fighter2?.state ?? null,
       onlineSlot: game?.onlineLocalSlot ?? null,
       onlineLobbyCode: game?.onlineSession?.lobbyCode ?? null,
+      lastSnapshotFrame: game?.onlineSession?.lastSnapshot?.frameCount ?? null,
     };
   });
+}
+
+async function dispatchQuickAttack(page) {
+  await page.evaluate(() => {
+    const game = window.__ringOfSteelGame;
+    const session = game?.onlineSession;
+    const baseFrame = session?.lastSnapshot?.frameCount ?? 0;
+    session?.sendInputFrame(baseFrame + 1, {
+      frame: baseFrame + 1,
+      held: {
+        left: false,
+        right: false,
+        sidestepUp: false,
+        sidestepDown: false,
+        block: false,
+      },
+      pressed: {
+        quick: true,
+        heavy: false,
+        thrust: false,
+        sidestepUp: false,
+        sidestepDown: false,
+        backstep: false,
+        block: false,
+      },
+    });
+  });
+}
+
+async function waitForFighterState(page, fighterKey, expectedState, timeoutMs = 5000) {
+  await page.waitForFunction(
+    ({ fighterKey, expectedState }) => {
+      const game = window.__ringOfSteelGame;
+      return game?.[fighterKey]?.state === expectedState;
+    },
+    { timeout: timeoutMs },
+    { fighterKey, expectedState },
+  );
 }
 
 async function run() {
@@ -183,6 +225,19 @@ async function run() {
     await Promise.all([
       waitForHud(hostPage),
       waitForHud(guestPage),
+    ]);
+
+    console.log('[browser-smoke] sending host quick attack');
+    await dispatchQuickAttack(hostPage);
+    await delay(750);
+    console.log('[browser-smoke] post-input state');
+    console.log(JSON.stringify({
+      host: await readGameState(hostPage),
+      guest: await readGameState(guestPage),
+    }, null, 2));
+    await Promise.all([
+      waitForFighterState(hostPage, 'fighter1', 'attack_active'),
+      waitForFighterState(guestPage, 'fighter1', 'attack_active'),
     ]);
 
     const [hostState, guestState] = await Promise.all([

@@ -481,6 +481,9 @@ export class ModelLoader {
     }
 
     ModelLoader._alignRootToBodyAnchor(clone, joints.bodyAnchor);
+    if (!joints.bodyAnchor) {
+      joints.bodyAnchor = ModelLoader._findBodyAnchor(clone);
+    }
 
     clone.updateWorldMatrix(true, true);
     if (joints.bodyAnchor) {

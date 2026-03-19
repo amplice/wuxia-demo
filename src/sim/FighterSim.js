@@ -15,6 +15,7 @@ const _selfBodyPosition = new THREE.Vector3();
 const _opponentBodyPosition = new THREE.Vector3();
 const _weaponBase = new THREE.Vector3();
 const _weaponTip = new THREE.Vector3();
+const _sampledBody = new THREE.Vector3();
 const _sampledBase = new THREE.Vector3();
 const _sampledTip = new THREE.Vector3();
 
@@ -115,9 +116,14 @@ export class FighterSim extends FighterCore {
   }
 
   getBodyAnchorWorldPosition(target = new THREE.Vector3()) {
+    const sampledFrame = this._getSampledClipFrame();
+    if (Array.isArray(sampledFrame?.body) && sampledFrame.body.length === 3) {
+      return this._localToWorld(_sampledBody.fromArray(sampledFrame.body), target);
+    }
+
     const sampledAnchor = this.authoritativeTracks?.bodyAnchorOffset;
     if (Array.isArray(sampledAnchor) && sampledAnchor.length === 3) {
-      return this._localToWorld(_sampledBase.fromArray(sampledAnchor), target);
+      return this._localToWorld(_sampledBody.fromArray(sampledAnchor), target);
     }
     return super.getBodyAnchorWorldPosition(target);
   }
@@ -226,21 +232,22 @@ export class FighterSim extends FighterCore {
 
   _getSampledWeaponClip() {
     if (!this.authoritativeTracks?.clips) return null;
-    if (this.fsm.isAttacking) {
-      return this.authoritativeTracks.clips[this._getAttackClipName()];
-    }
-    return this.authoritativeTracks.clips.idle ?? null;
+    return this.authoritativeTracks.clips[this.activeClipName] ?? this.authoritativeTracks.clips.idle ?? null;
   }
 
-  _applyAuthoritativeWeaponPose(baseTarget, tipTarget) {
+  _getSampledClipFrame() {
     const clip = this._getSampledWeaponClip();
-    if (!clip?.frames?.length) return false;
+    if (!clip?.frames?.length) return null;
 
     const frameCount = clip.frames.length;
     const frameIndex = this.fsm.isAttacking
       ? THREE.MathUtils.clamp(this.stateFrames - 1, 0, frameCount - 1)
       : Math.floor((this.walkPhase * 60) % frameCount);
-    const frame = clip.frames[frameIndex];
+    return clip.frames[frameIndex] ?? null;
+  }
+
+  _applyAuthoritativeWeaponPose(baseTarget, tipTarget) {
+    const frame = this._getSampledClipFrame();
     if (!frame) return false;
 
     _sampledBase.fromArray(frame.base);
