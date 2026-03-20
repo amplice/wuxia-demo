@@ -14,8 +14,12 @@ export class CharacterSelect {
     this.onlineSection = document.getElementById('online-section');
     this.onlineServerUrl = document.getElementById('online-server-url');
     this.onlineLobbyCode = document.getElementById('online-lobby-code');
+    this.onlineLobbyList = document.getElementById('online-lobby-list');
     this.onlineStatusNote = this.onlineSection?.querySelector('.status-note') ?? null;
     this.onlineLeaveBtn = document.getElementById('online-leave-btn');
+    this.onlineHostPublicBtn = document.getElementById('online-host-public-btn');
+    this.onlineQuickMatchBtn = document.getElementById('online-quick-match-btn');
+    this.onlineRefreshBtn = document.getElementById('online-refresh-btn');
     this.p1Container = document.getElementById('p1-char-options');
     this.p2Container = document.getElementById('p2-char-options');
     this.p2Heading = document.getElementById('p2-char-heading');
@@ -27,7 +31,13 @@ export class CharacterSelect {
     this._keyHandler = this._onKey.bind(this);
     this._onlineBusy = false;
     this._onlineLocked = false;
+    this._publicLobbies = [];
     this.onLeaveOnline = null;
+    this.onModeChange = null;
+    this.onOnlineHostPublic = null;
+    this.onOnlineQuickMatch = null;
+    this.onOnlineRefresh = null;
+    this.onOnlineJoinPublic = null;
 
     if (this.onlineServerUrl && !this.onlineServerUrl.value) {
       this.onlineServerUrl.value = getDefaultMultiplayerWsUrl();
@@ -46,6 +56,7 @@ export class CharacterSelect {
         btn.classList.add('active');
         this.mode = btn.dataset.mode;
         this._updateModeUI();
+        if (this.onModeChange) this.onModeChange(this.mode);
       });
     });
 
@@ -75,6 +86,27 @@ export class CharacterSelect {
 
     if (this.onlineLobbyCode) {
       this.onlineLobbyCode.addEventListener('input', () => this._updateStartButton());
+    }
+    if (this.onlineHostPublicBtn) {
+      this.onlineHostPublicBtn.addEventListener('click', () => {
+        if (!this._onlineBusy && !this._onlineLocked && this.onOnlineHostPublic) {
+          this.onOnlineHostPublic(this._buildOnlineConfig());
+        }
+      });
+    }
+    if (this.onlineQuickMatchBtn) {
+      this.onlineQuickMatchBtn.addEventListener('click', () => {
+        if (!this._onlineBusy && !this._onlineLocked && this.onOnlineQuickMatch) {
+          this.onOnlineQuickMatch(this._buildOnlineConfig());
+        }
+      });
+    }
+    if (this.onlineRefreshBtn) {
+      this.onlineRefreshBtn.addEventListener('click', () => {
+        if (!this._onlineBusy && !this._onlineLocked && this.onOnlineRefresh) {
+          this.onOnlineRefresh(this._buildOnlineConfig());
+        }
+      });
     }
     if (this.onlineLeaveBtn) {
       this.onlineLeaveBtn.addEventListener('click', () => {
@@ -161,6 +193,7 @@ export class CharacterSelect {
     if (this.startBtn) {
       this._updateStartButton();
     }
+    this._updateOnlineButtons();
     this._updateOpponentLabel();
   }
 
@@ -189,12 +222,78 @@ export class CharacterSelect {
     } else if (lobbyCode) {
       this.startBtn.textContent = 'JOIN';
     } else {
-      this.startBtn.textContent = 'HOST';
+      this.startBtn.textContent = 'HOST PRIVATE';
     }
     this.startBtn.disabled = false;
     if (this.onlineLeaveBtn) {
       this.onlineLeaveBtn.style.display = this._onlineLocked ? '' : 'none';
       this.onlineLeaveBtn.disabled = false;
+    }
+  }
+
+  _updateOnlineButtons() {
+    const disabled = this.mode !== 'online' || this._onlineBusy || this._onlineLocked;
+    if (this.onlineHostPublicBtn) this.onlineHostPublicBtn.disabled = disabled;
+    if (this.onlineQuickMatchBtn) this.onlineQuickMatchBtn.disabled = disabled;
+    if (this.onlineRefreshBtn) this.onlineRefreshBtn.disabled = disabled;
+  }
+
+  _buildOnlineConfig() {
+    return {
+      mode: this.mode,
+      difficulty: this.difficulty,
+      p1Char: this.p1Char,
+      p2Char: this.p2Char,
+      serverUrl: this.onlineServerUrl?.value?.trim() || '',
+      lobbyCode: this.onlineLobbyCode?.value?.trim().toUpperCase() || '',
+    };
+  }
+
+  setPublicLobbies(lobbies = []) {
+    this._publicLobbies = Array.isArray(lobbies) ? lobbies : [];
+    this._renderPublicLobbies();
+  }
+
+  _renderPublicLobbies() {
+    if (!this.onlineLobbyList) return;
+    this.onlineLobbyList.innerHTML = '';
+
+    if (!this._publicLobbies.length) {
+      const empty = document.createElement('div');
+      empty.className = 'online-lobby-empty';
+      empty.textContent = 'No public matches waiting.';
+      this.onlineLobbyList.appendChild(empty);
+      return;
+    }
+
+    for (const lobby of this._publicLobbies) {
+      const row = document.createElement('div');
+      row.className = 'online-lobby-row';
+
+      const main = document.createElement('div');
+      main.className = 'online-lobby-main';
+      main.innerHTML = `
+        <span class="emphasis">${lobby.code}</span>
+        <span>${lobby.playerCount}/${lobby.maxPlayers} Players</span>
+        <span>${String(lobby.hostCharacterId || 'unknown').replace('_', ' ')}</span>
+      `;
+
+      const joinBtn = document.createElement('button');
+      joinBtn.className = 'select-btn';
+      joinBtn.textContent = 'JOIN';
+      joinBtn.disabled = this.mode !== 'online' || this._onlineBusy || this._onlineLocked;
+      joinBtn.addEventListener('click', () => {
+        if (this.onOnlineJoinPublic) {
+          this.onOnlineJoinPublic({
+            ...this._buildOnlineConfig(),
+            lobbyCode: lobby.code,
+          });
+        }
+      });
+
+      row.appendChild(main);
+      row.appendChild(joinBtn);
+      this.onlineLobbyList.appendChild(row);
     }
   }
 
@@ -214,6 +313,8 @@ export class CharacterSelect {
   setOnlineBusy(busy) {
     this._onlineBusy = Boolean(busy);
     this._updateStartButton();
+    this._updateOnlineButtons();
+    this._renderPublicLobbies();
   }
 
   setOnlineLocked(locked) {
@@ -221,6 +322,8 @@ export class CharacterSelect {
     if (this.onlineServerUrl) this.onlineServerUrl.readOnly = this._onlineLocked;
     if (this.onlineLobbyCode) this.onlineLobbyCode.readOnly = this._onlineLocked;
     this._updateStartButton();
+    this._updateOnlineButtons();
+    this._renderPublicLobbies();
   }
 
   resetOnlineState() {
@@ -229,6 +332,8 @@ export class CharacterSelect {
     if (this.onlineServerUrl) this.onlineServerUrl.readOnly = false;
     if (this.onlineLobbyCode) this.onlineLobbyCode.readOnly = false;
     this._updateStartButton();
+    this._updateOnlineButtons();
+    this._renderPublicLobbies();
   }
 
   show() {

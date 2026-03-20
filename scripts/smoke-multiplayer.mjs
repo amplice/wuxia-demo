@@ -92,12 +92,19 @@ async function run() {
     host.on('message', (raw) => hostEvents.push(JSON.parse(String(raw))));
     guest.on('message', (raw) => guestEvents.push(JSON.parse(String(raw))));
 
-    host.send(JSON.stringify({ type: 'create_lobby' }));
+    host.send(JSON.stringify({ type: 'create_lobby', visibility: 'public' }));
     const hostLobby = await waitForMessage(host, (message) => message.type === 'lobby_state' && message.code);
     const code = hostLobby.code;
 
+    guest.send(JSON.stringify({ type: 'list_lobbies' }));
+    const lobbyList = await waitForMessage(guest, (message) => message.type === 'lobby_list');
+    const listed = Array.isArray(lobbyList.lobbies) && lobbyList.lobbies.some((lobby) => lobby.code === code);
+    if (!listed) {
+      throw new Error('Public lobby was not visible in lobby list.');
+    }
+
     host.send(JSON.stringify({ type: 'select_character', characterId: 'spearman' }));
-    guest.send(JSON.stringify({ type: 'join_lobby', code }));
+    guest.send(JSON.stringify({ type: 'quick_match' }));
     await waitForMessage(guest, (message) => message.type === 'lobby_state' && message.code === code);
     guest.send(JSON.stringify({ type: 'select_character', characterId: 'ronin' }));
 
@@ -114,6 +121,7 @@ async function run() {
     const summary = {
       health,
       code,
+      listed,
       matchStarted: [...hostEvents, ...guestEvents].some((message) => message.type === 'match_start'),
       snapshotCount: [...hostEvents, ...guestEvents].filter((message) => message.type === 'state_snapshot').length,
       combatEventCount: [...hostEvents, ...guestEvents].filter((message) => message.type === 'combat_event').length,

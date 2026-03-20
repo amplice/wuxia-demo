@@ -10,6 +10,7 @@ export class OnlineSession extends EventTarget {
     this.clientId = null;
     this.lobbyCode = null;
     this.lastLobbyState = null;
+    this.lastLobbyList = [];
     this.lastSnapshot = null;
     this._wireClientEvents();
   }
@@ -26,12 +27,17 @@ export class OnlineSession extends EventTarget {
     this.connected = false;
     this.lobbyCode = null;
     this.lastLobbyState = null;
+    this.lastLobbyList = [];
     this.lastSnapshot = null;
   }
 
-  async createLobby(characterId = null) {
+  async createLobby(characterId = null, visibility = 'private') {
     await this._ensureConnected();
-    this.client.createLobby();
+    if (visibility === 'public') {
+      this.client.createPublicLobby();
+    } else {
+      this.client.createLobby();
+    }
     const lobby = await this._waitForEvent('lobby_state', (detail) => Boolean(detail?.code));
     if (characterId) this.client.setCharacter(characterId);
     return lobby;
@@ -41,6 +47,20 @@ export class OnlineSession extends EventTarget {
     await this._ensureConnected();
     this.client.joinLobby(code);
     const lobby = await this._waitForEvent('lobby_state', (detail) => detail?.code === code);
+    if (characterId) this.client.setCharacter(characterId);
+    return lobby;
+  }
+
+  async listLobbies() {
+    await this._ensureConnected();
+    this.client.listLobbies();
+    return this._waitForEvent('lobby_list');
+  }
+
+  async quickMatch(characterId = null) {
+    await this._ensureConnected();
+    this.client.quickMatch();
+    const lobby = await this._waitForEvent('lobby_state', (detail) => Boolean(detail?.code));
     if (characterId) this.client.setCharacter(characterId);
     return lobby;
   }
@@ -76,6 +96,9 @@ export class OnlineSession extends EventTarget {
     rebroadcast('lobby_state', (detail) => {
       this.lobbyCode = detail.code;
       this.lastLobbyState = detail;
+    });
+    rebroadcast('lobby_list', (detail) => {
+      this.lastLobbyList = Array.isArray(detail?.lobbies) ? detail.lobbies : [];
     });
     rebroadcast('match_start');
     rebroadcast('match_state');

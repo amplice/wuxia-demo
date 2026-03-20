@@ -42,6 +42,8 @@ export class Game {
     this.aiController = null;
     this.matchSim = null;
     this.onlineSession = null;
+    this.onlineDiscoverySession = null;
+    this.onlineLobbyRefreshTimer = null;
     this.onlineLocalSlot = null;
     this.onlineMatchPlayers = null;
     this._suppressOnlineClose = false;
@@ -97,11 +99,14 @@ export class Game {
     this.ui.showTitle();
 
     this.ui.title.onStart = () => {
+      this._disconnectDiscoverySession();
+      this._stopOnlineLobbyRefresh();
       this._disconnectOnlineSession();
       this.gameState = GameState.SELECT;
       this.ui.showSelect();
       this.ui.select.resetOnlineState();
-      this.ui.select.setOnlineStatus('Leave lobby code empty to host a room. Enter a code to join an existing room, then press ready.');
+      this.ui.select.setPublicLobbies([]);
+      this.ui.select.setOnlineStatus('Browse a public room, host one, quick match, or enter a direct code manually.');
     };
 
     this.ui.title.onAnimPlayer = async () => {
@@ -117,16 +122,42 @@ export class Game {
       }
       this._startMatch(config.p1Char, config.p2Char);
     };
+    this.ui.select.onModeChange = async (mode) => {
+      if (mode === 'online') {
+        this._startOnlineLobbyRefresh();
+        await this._refreshPublicLobbies();
+      } else {
+        this._stopOnlineLobbyRefresh();
+        this._disconnectDiscoverySession();
+      }
+    };
+    this.ui.select.onOnlineHostPublic = async (config) => {
+      await this._hostPublicOnline(config);
+    };
+    this.ui.select.onOnlineQuickMatch = async (config) => {
+      await this._startQuickMatch(config);
+    };
+    this.ui.select.onOnlineRefresh = async (config) => {
+      await this._refreshPublicLobbies(config.serverUrl);
+    };
+    this.ui.select.onOnlineJoinPublic = async (config) => {
+      await this._startOnlineSession(config);
+    };
     this.ui.select.onLeaveOnline = () => {
+      this._stopOnlineLobbyRefresh();
+      this._disconnectDiscoverySession();
       this._disconnectOnlineSession();
       this._cleanupFighters();
       this.gameState = GameState.SELECT;
       this.ui.showSelect();
       this.ui.select.resetOnlineState();
-      this.ui.select.setOnlineStatus('Disconnected. Leave lobby code empty to host a room, or enter a code to join.');
+      this.ui.select.setPublicLobbies([]);
+      this.ui.select.setOnlineStatus('Disconnected. Browse a public room, host one, quick match, or enter a direct code manually.');
     };
 
     this.ui.victory.onContinue = () => {
+      this._stopOnlineLobbyRefresh();
+      this._disconnectDiscoverySession();
       this._disconnectOnlineSession();
       this.gameState = GameState.TITLE;
       this._cleanupFighters();
@@ -244,9 +275,12 @@ export class Game {
     this.difficulty = config.difficulty ?? this.difficulty;
     const requestedUrl = config.serverUrl || undefined;
     const requestedCode = config.lobbyCode || '';
+    this._stopOnlineLobbyRefresh();
+    this._disconnectDiscoverySession();
 
     if (
       this.onlineSession?.connected &&
+      this.onlineSession?.lobbyCode &&
       this.onlineSession.url === requestedUrl &&
       (!requestedCode || requestedCode === this.onlineSession.lobbyCode)
     ) {
@@ -303,6 +337,103 @@ export class Game {
     }
   }
 
+  async _hostPublicOnline(config) {
+    this.mode = 'online';
+    const requestedUrl = config.serverUrl || undefined;
+    this._stopOnlineLobbyRefresh();
+    this._disconnectDiscoverySession();
+    this._disconnectOnlineSession();
+    this.ui.select.setOnlineBusy(true);
+    this.ui.select.setOnlineLocked(false);
+    this.ui.select.setOnlineStatus('CREATING PUBLIC MATCH...');
+
+    try {
+      const session = new OnlineSession({ url: requestedUrl });
+      this.onlineSession = session;
+      this.onlineLocalSlot = null;
+      this.onlineMatchPlayers = null;
+      this._bindOnlineSession(session);
+      await session.connect();
+      await session.createLobby(config.p1Char, 'public');
+      session.setReady(true);
+      this.ui.select.setOnlineBusy(false);
+      this.ui.select.setOnlineLocked(true);
+      this.ui.select.setOnlineStatus(`PUBLIC LOBBY ${session.lobbyCode}. WAITING FOR OPPONENT...`);
+    } catch (err) {
+      console.error('Public host failed:', err);
+      this.ui.select.setOnlineBusy(false);
+      this.ui.select.setOnlineLocked(false);
+      this.ui.select.setOnlineStatus(`HOST FAILED: ${err?.message || 'UNKNOWN ERROR'}`);
+      this._disconnectOnlineSession();
+    }
+  }
+
+  async _startQuickMatch(config) {
+    this.mode = 'online';
+    const requestedUrl = config.serverUrl || undefined;
+    this._stopOnlineLobbyRefresh();
+    this._disconnectDiscoverySession();
+    this._disconnectOnlineSession();
+    this.ui.select.setOnlineBusy(true);
+    this.ui.select.setOnlineLocked(false);
+    this.ui.select.setOnlineStatus('FINDING PUBLIC MATCH...');
+
+    try {
+      const session = new OnlineSession({ url: requestedUrl });
+      this.onlineSession = session;
+      this.onlineLocalSlot = null;
+      this.onlineMatchPlayers = null;
+      this._bindOnlineSession(session);
+      await session.connect();
+      await session.quickMatch(config.p1Char);
+      session.setReady(true);
+      this.ui.select.setOnlineBusy(false);
+      this.ui.select.setOnlineLocked(true);
+      this.ui.select.setOnlineStatus(`LOBBY ${session.lobbyCode}. WAITING FOR OPPONENT...`);
+    } catch (err) {
+      console.error('Quick match failed:', err);
+      this.ui.select.setOnlineBusy(false);
+      this.ui.select.setOnlineLocked(false);
+      this.ui.select.setOnlineStatus(`QUICK MATCH FAILED: ${err?.message || 'UNKNOWN ERROR'}`);
+      this._disconnectOnlineSession();
+    }
+  }
+
+  async _refreshPublicLobbies(serverUrl = null) {
+    const requestedUrl = serverUrl || this.ui.select.onlineServerUrl?.value?.trim() || undefined;
+    let session = this.onlineDiscoverySession;
+
+    try {
+      if (!session || !session.connected || (requestedUrl && session.url !== requestedUrl)) {
+        if (session) {
+          session.disconnect();
+        }
+        session = new OnlineSession({ url: requestedUrl });
+        session.addEventListener('lobby_list', (event) => {
+          this.ui.select.setPublicLobbies(event.detail?.lobbies ?? []);
+        });
+        this.onlineDiscoverySession = session;
+        await session.connect();
+      }
+
+      const result = await session.listLobbies();
+      this.ui.select.setPublicLobbies(result?.lobbies ?? []);
+      if (!this.ui.select.onlineLobbyCode?.value) {
+        this.ui.select.setOnlineStatus('Browse a public room, host one, quick match, or enter a direct code manually.');
+      }
+    } catch (err) {
+      console.error('Public lobby refresh failed:', err);
+      this.ui.select.setPublicLobbies([]);
+      this.ui.select.setOnlineStatus(`LOBBY LIST FAILED: ${err?.message || 'UNKNOWN ERROR'}`);
+    }
+  }
+
+  _disconnectDiscoverySession() {
+    if (!this.onlineDiscoverySession) return;
+    this.onlineDiscoverySession.disconnect();
+    this.onlineDiscoverySession = null;
+  }
+
   _bindOnlineSession(session) {
     session.addEventListener('error', (event) => {
       const detail = event.detail;
@@ -317,6 +448,9 @@ export class Game {
       this._handleOnlineDisconnect('DISCONNECTED FROM SERVER.');
     });
 
+    session.addEventListener('lobby_list', (event) => {
+      this.ui.select.setPublicLobbies(event.detail?.lobbies ?? []);
+    });
     session.addEventListener('lobby_state', (event) => {
       this._handleOnlineLobbyState(event.detail);
     });
@@ -480,6 +614,7 @@ export class Game {
 
   _handleOnlineDisconnect(message) {
     if (this.mode !== 'online') return;
+    this._startOnlineLobbyRefresh();
     this._cleanupFighters();
     this.matchSim = null;
     this.aiController = null;
@@ -492,6 +627,24 @@ export class Game {
     this.onlineLocalSlot = null;
     this.onlineMatchPlayers = null;
     this.onlinePendingMatchResult = null;
+  }
+
+  _startOnlineLobbyRefresh() {
+    this._stopOnlineLobbyRefresh();
+    this.onlineLobbyRefreshTimer = setInterval(() => {
+      if (this.mode !== 'online') return;
+      if (this.gameState !== GameState.SELECT) return;
+      if (this.onlineSession?.lobbyCode) return;
+      this._refreshPublicLobbies().catch((err) => {
+        console.error('Lobby refresh tick failed:', err);
+      });
+    }, 2000);
+  }
+
+  _stopOnlineLobbyRefresh() {
+    if (!this.onlineLobbyRefreshTimer) return;
+    clearInterval(this.onlineLobbyRefreshTimer);
+    this.onlineLobbyRefreshTimer = null;
   }
 
   async _startAnimationSandbox() {
@@ -669,13 +822,28 @@ export class Game {
   _updateOnlineFighting(_dt) {
     if (!this.onlineSession?.connected) return;
     const baseFrame = this.onlineSession.lastSnapshot?.frameCount ?? 0;
-    const input = captureInputFrame(this.input, 0, baseFrame + 1);
+    const localFrame = this.clock.frameCount;
+    const input = captureInputFrame(this.input, 0, localFrame);
+    this._applyOnlineLocalControlMapping(input);
+    input.frame = baseFrame + 1;
     try {
       this.onlineSession.sendInputFrame(input.frame, input);
     } catch (err) {
       console.error('Failed to send online input frame:', err);
     }
     this._updateHUD();
+  }
+
+  _applyOnlineLocalControlMapping(input) {
+    if (!input || this.onlineLocalSlot !== 1) return;
+
+    const heldLeft = input.held.left;
+    input.held.left = input.held.right;
+    input.held.right = heldLeft;
+
+    const pressedUp = input.pressed.sidestepUp;
+    input.pressed.sidestepUp = input.pressed.sidestepDown;
+    input.pressed.sidestepDown = pressedUp;
   }
 
   _handleSimStep(step) {

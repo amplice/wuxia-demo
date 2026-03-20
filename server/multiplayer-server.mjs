@@ -16,6 +16,7 @@ import { createEmptyInputFrame } from '../src/sim/InputFrame.js';
 import {
   ClientMessageType,
   ServerMessageType,
+  createLobbyListPayload,
   createLobbyStatePayload,
   sanitizeInputFrame,
   validateClientMessage,
@@ -188,10 +189,13 @@ class LobbyManager {
     this.lobbies = new Map();
   }
 
-  create(client) {
+  create(client, { visibility = 'private' } = {}) {
+    this._ensureClientFree(client);
     const code = this._generateCode();
     const lobby = {
       code,
+      visibility,
+      createdAt: Date.now(),
       phase: 'lobby',
       players: [this._createPlayer(client, 0)],
       room: null,
@@ -203,6 +207,7 @@ class LobbyManager {
   }
 
   join(client, code) {
+    this._ensureClientFree(client);
     const lobby = this.lobbies.get(code);
     if (!lobby) throw new Error(`Lobby '${code}' does not exist.`);
     if (lobby.players.length >= MAX_PLAYERS_PER_LOBBY) throw new Error(`Lobby '${code}' is full.`);
@@ -213,6 +218,32 @@ class LobbyManager {
     client.lobbyCode = code;
     client.slot = slot;
     return lobby;
+  }
+
+  quickMatch(client) {
+    this._ensureClientFree(client);
+    const lobby = [...this.lobbies.values()]
+      .filter((entry) =>
+        entry.visibility === 'public' &&
+        (entry.phase === 'lobby' || entry.phase === 'match_pending') &&
+        entry.players.filter((player) => player.connected).length < MAX_PLAYERS_PER_LOBBY)
+      .sort((a, b) => a.createdAt - b.createdAt)[0];
+
+    if (lobby) {
+      return this.join(client, lobby.code);
+    }
+
+    return this.create(client, { visibility: 'public' });
+  }
+
+  listPublicLobbies() {
+    return [...this.lobbies.values()]
+      .filter((lobby) =>
+        lobby.visibility === 'public' &&
+        !lobby.room &&
+        lobby.players.some((player) => player.connected) &&
+        lobby.players.filter((player) => player.connected).length < MAX_PLAYERS_PER_LOBBY)
+      .sort((a, b) => a.createdAt - b.createdAt);
   }
 
   setCharacter(client, characterId) {
@@ -285,6 +316,12 @@ class LobbyManager {
     return lobby;
   }
 
+  _ensureClientFree(client) {
+    if (client.lobbyCode && this.lobbies.has(client.lobbyCode)) {
+      throw new Error('Client is already in a lobby.');
+    }
+  }
+
   _createPlayer(client, slot) {
     return {
       id: client.id,
@@ -329,13 +366,23 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocketServer({ server, path: '/ws' });
 const lobbyManager = new LobbyManager();
+const connectedClients = new Set();
+
+function broadcastPublicLobbyList() {
+  const payload = createLobbyListPayload(lobbyManager.listPublicLobbies());
+  for (const socket of connectedClients) {
+    send(socket, payload);
+  }
+}
 
 wss.on('connection', (socket) => {
+  connectedClients.add(socket);
   socket.id = crypto.randomUUID();
   send(socket, {
     type: ServerMessageType.WELCOME,
     clientId: socket.id,
   });
+  send(socket, createLobbyListPayload(lobbyManager.listPublicLobbies()));
 
   socket.on('message', (raw) => {
     let message;
@@ -355,13 +402,24 @@ wss.on('connection', (socket) => {
     try {
       switch (message.type) {
         case ClientMessageType.CREATE_LOBBY: {
-          const lobby = lobbyManager.create(socket);
+          const lobby = lobbyManager.create(socket, { visibility: message.visibility ?? 'private' });
           broadcastLobby(lobby);
+          broadcastPublicLobbyList();
           break;
         }
         case ClientMessageType.JOIN_LOBBY: {
           const lobby = lobbyManager.join(socket, message.code.trim().toUpperCase());
           broadcastLobby(lobby);
+          broadcastPublicLobbyList();
+          break;
+        }
+        case ClientMessageType.LIST_LOBBIES:
+          send(socket, createLobbyListPayload(lobbyManager.listPublicLobbies()));
+          break;
+        case ClientMessageType.QUICK_MATCH: {
+          const lobby = lobbyManager.quickMatch(socket);
+          broadcastLobby(lobby);
+          broadcastPublicLobbyList();
           break;
         }
         case ClientMessageType.SELECT_CHARACTER: {
@@ -396,8 +454,10 @@ wss.on('connection', (socket) => {
   });
 
   socket.on('close', () => {
+    connectedClients.delete(socket);
     const lobby = lobbyManager.disconnect(socket);
     if (lobby) broadcastLobby(lobby);
+    broadcastPublicLobbyList();
   });
 });
 

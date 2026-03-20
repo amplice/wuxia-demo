@@ -58,8 +58,20 @@ export class MultiplayerClient extends EventTarget {
     this._send({ type: ClientMessageType.CREATE_LOBBY });
   }
 
+  createPublicLobby() {
+    this._send({ type: ClientMessageType.CREATE_LOBBY, visibility: 'public' });
+  }
+
   joinLobby(code) {
     this._send({ type: ClientMessageType.JOIN_LOBBY, code });
+  }
+
+  listLobbies() {
+    this._send({ type: ClientMessageType.LIST_LOBBIES });
+  }
+
+  quickMatch() {
+    this._send({ type: ClientMessageType.QUICK_MATCH });
   }
 
   setCharacter(characterId) {

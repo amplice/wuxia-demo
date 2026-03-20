@@ -15,6 +15,14 @@ export class UIManager {
     this._animPlayerPromise = null;
   }
 
+  _blurActiveEditable() {
+    const active = document.activeElement;
+    if (!active || typeof active.closest !== 'function' || typeof active.blur !== 'function') return;
+    if (active.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""], [contenteditable], button')) {
+      active.blur();
+    }
+  }
+
   async ensureAnimPlayer() {
     if (this.animPlayer) return this.animPlayer;
 
@@ -47,26 +55,31 @@ export class UIManager {
 
   showTitle() {
     this.hideAll();
+    this._blurActiveEditable();
     this.title.show();
   }
 
   showSelect() {
     this.hideAll();
+    this._blurActiveEditable();
     this.select.show();
   }
 
   showHUD() {
     this.hideAll();
+    this._blurActiveEditable();
     this.hud.show();
   }
 
   showVictory(winner, p1Score, p2Score) {
     this.hud.hide();
+    this._blurActiveEditable();
     this.victory.show(winner, p1Score, p2Score);
   }
 
   async showAnimPlayer() {
     this.hideAll();
+    this._blurActiveEditable();
     const animPlayer = await this.ensureAnimPlayer();
     animPlayer.show();
     return animPlayer;
