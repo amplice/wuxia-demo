@@ -468,9 +468,17 @@ export class AIController {
     this.pendingAction = null;
     this.currentAction = null;
     this.blockHeldFrames = 0;
+    this._opponent = null;
     this._opponentLastState = null;
     this._opponentBlockCount = 0;
     this._opponentAttackCount = 0;
     this._decayTimer = 0;
+    this._selfLastState = null;
+    this._selfWasAttacking = false;
+    this._lastWhiffFrame = -9999;
+    this._opponentLastSidestepFrame = -9999;
+    this._selfLastSidestepFrame = -9999;
+    this._selfLastBackstepFrame = -9999;
+    this._mobilityFatigue = 0;
   }
 }

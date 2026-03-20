@@ -121,6 +121,35 @@ async function readGameState(page) {
   });
 }
 
+async function dispatchForwardMove(page) {
+  await page.evaluate(() => {
+    const game = window.__ringOfSteelGame;
+    const session = game?.onlineSession;
+    const baseFrame = session?.lastSnapshot?.frameCount ?? 0;
+    const input = {
+      frame: baseFrame + 1,
+      held: {
+        left: true,
+        right: false,
+        sidestepUp: false,
+        sidestepDown: false,
+        block: false,
+      },
+      pressed: {
+        quick: false,
+        heavy: false,
+        thrust: false,
+        sidestepUp: false,
+        sidestepDown: false,
+        backstep: false,
+        block: false,
+      },
+    };
+    game?._applyOnlineLocalControlMapping?.(input);
+    session?.sendInputFrame(baseFrame + 1, input);
+  });
+}
+
 async function waitForLobbyListRow(page, timeoutMs = 15000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -196,12 +225,8 @@ async function runOne({ mode }) {
       ]);
       console.log('[public-ui-smoke] HUD visible');
 
-      await guestPage.bringToFront();
-      await guestPage.mouse.click(200, 200);
-      await delay(100);
-      await guestPage.keyboard.down('a');
-      await delay(900);
-      await guestPage.keyboard.up('a');
+      await dispatchForwardMove(guestPage);
+      await delay(750);
       console.log('[public-ui-smoke] guest move sent');
 
       const [hostState, guestState] = await Promise.all([
@@ -222,10 +247,8 @@ async function runOne({ mode }) {
     ]);
     console.log('[public-ui-smoke] HUD visible');
 
-    await guestPage.bringToFront();
-    await guestPage.keyboard.down('a');
-    await delay(900);
-    await guestPage.keyboard.up('a');
+    await dispatchForwardMove(guestPage);
+    await delay(750);
     console.log('[public-ui-smoke] guest move sent');
 
     const [hostState, guestState] = await Promise.all([

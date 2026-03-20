@@ -15,6 +15,9 @@ export class CharacterSelect {
     this.onlineServerUrl = document.getElementById('online-server-url');
     this.onlineLobbyCode = document.getElementById('online-lobby-code');
     this.onlineLobbyList = document.getElementById('online-lobby-list');
+    this.onlineLobbyPanel = document.getElementById('online-lobby-panel');
+    this.onlineLobbySlot1 = document.getElementById('online-lobby-slot-1');
+    this.onlineLobbySlot2 = document.getElementById('online-lobby-slot-2');
     this.onlineStatusNote = this.onlineSection?.querySelector('.status-note') ?? null;
     this.onlineLeaveBtn = document.getElementById('online-leave-btn');
     this.onlineHostPublicBtn = document.getElementById('online-host-public-btn');
@@ -46,6 +49,7 @@ export class CharacterSelect {
     this._setupButtons();
     this._buildCharButtons();
     this._updateModeUI();
+    this.clearOnlineLobbyInfo();
   }
 
   _setupButtons() {
@@ -218,13 +222,15 @@ export class CharacterSelect {
 
     const lobbyCode = this.onlineLobbyCode?.value?.trim() ?? '';
     if (this._onlineLocked) {
-      this.startBtn.textContent = 'READY';
+      this.startBtn.textContent = 'IN LOBBY';
+      this.startBtn.disabled = true;
     } else if (lobbyCode) {
       this.startBtn.textContent = 'JOIN';
+      this.startBtn.disabled = false;
     } else {
       this.startBtn.textContent = 'HOST PRIVATE';
+      this.startBtn.disabled = false;
     }
-    this.startBtn.disabled = false;
     if (this.onlineLeaveBtn) {
       this.onlineLeaveBtn.style.display = this._onlineLocked ? '' : 'none';
       this.onlineLeaveBtn.disabled = false;
@@ -310,6 +316,33 @@ export class CharacterSelect {
     }
   }
 
+  setOnlineLobbyInfo(detail = null) {
+    if (!this.onlineLobbyPanel || !this.onlineLobbySlot1 || !this.onlineLobbySlot2) return;
+    const players = Array.isArray(detail?.players) ? detail.players : [];
+    this._setOnlineSlotState(this.onlineLobbySlot1, players.find((player) => player.slot === 0) ?? null, 0);
+    this._setOnlineSlotState(this.onlineLobbySlot2, players.find((player) => player.slot === 1) ?? null, 1);
+  }
+
+  clearOnlineLobbyInfo() {
+    if (!this.onlineLobbySlot1 || !this.onlineLobbySlot2) return;
+    this._setOnlineSlotState(this.onlineLobbySlot1, null, 0);
+    this._setOnlineSlotState(this.onlineLobbySlot2, null, 1);
+  }
+
+  _setOnlineSlotState(slotEl, player, slotIndex) {
+    if (!slotEl) return;
+    const valueEl = slotEl.querySelector('.value');
+    slotEl.classList.toggle('empty', !player?.connected);
+    if (!valueEl) return;
+    if (!player?.connected) {
+      valueEl.textContent = 'Open';
+      return;
+    }
+    const role = slotIndex === 0 ? 'Host' : 'Guest';
+    const you = player.self ? ' (You)' : '';
+    valueEl.textContent = `${role}${you} Connected`;
+  }
+
   setOnlineBusy(busy) {
     this._onlineBusy = Boolean(busy);
     this._updateStartButton();
@@ -331,6 +364,7 @@ export class CharacterSelect {
     this._onlineLocked = false;
     if (this.onlineServerUrl) this.onlineServerUrl.readOnly = false;
     if (this.onlineLobbyCode) this.onlineLobbyCode.readOnly = false;
+    this.clearOnlineLobbyInfo();
     this._updateStartButton();
     this._updateOnlineButtons();
     this._renderPublicLobbies();
