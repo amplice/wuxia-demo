@@ -391,6 +391,13 @@ export class Game {
 
   _startOnlineMatch(players, snapshot = null) {
     this._cleanupFighters();
+    this.clock.setTimeScale(1.0);
+    this.killSlowMoTimer = 0;
+    this._killRealStart = null;
+    this.cameraController.stopKillCam();
+    this.cameraController.reset();
+    this.screenEffects.reset();
+    this.particles.reset();
 
     const sortedPlayers = [...players].sort((a, b) => a.slot - b.slot);
     const p1 = sortedPlayers[0];

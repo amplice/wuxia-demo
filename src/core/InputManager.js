@@ -42,6 +42,7 @@ export class InputManager {
   }
 
   _onKeyDown(e) {
+    if (this._isEditableTarget(e.target)) return;
     if (!this.keysDown.has(e.code)) {
       this.keysPressed.add(e.code);
     }
@@ -50,9 +51,17 @@ export class InputManager {
   }
 
   _onKeyUp(e) {
+    if (this._isEditableTarget(e.target)) return;
     this.keysDown.delete(e.code);
     this.keysReleased.add(e.code);
     e.preventDefault();
+  }
+
+  _isEditableTarget(target) {
+    if (!target || typeof target.closest !== 'function') return false;
+    return Boolean(
+      target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""], [contenteditable]')
+    );
   }
 
   update(frameCount) {

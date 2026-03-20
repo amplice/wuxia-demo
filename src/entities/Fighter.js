@@ -54,6 +54,7 @@ export class Fighter extends FighterCore {
 
     this.group = new THREE.Group();
     this.group.add(this.visualRoot);
+    this.position = this.group.position;
 
     this.weapon = new Weapon(this.weaponType);
 
@@ -466,7 +467,7 @@ export class Fighter extends FighterCore {
     this._updatePlayerMarker();
     this.syncStatePresentation();
     const action = this.activeClipName ? this.clipActions[this.activeClipName] : null;
-    if (action) {
+    if (action && this._shouldSeekAuthoritativeClipTime()) {
       const clipDuration = action.getClip().duration / Math.max(action.timeScale || 1, 1e-6);
       const progress = Math.max(0, Math.min(1, (snapshot.stateDuration ?? 0) > 0
         ? (snapshot.stateFrames ?? 0) / snapshot.stateDuration
@@ -475,6 +476,24 @@ export class Fighter extends FighterCore {
       this.mixer?.update(0);
     }
     this._updateTipMotion();
+  }
+
+  _shouldSeekAuthoritativeClipTime() {
+    switch (this.state) {
+      case FighterState.ATTACK_ACTIVE:
+      case FighterState.BLOCK_STUN:
+      case FighterState.PARRY:
+      case FighterState.PARRY_SUCCESS:
+      case FighterState.PARRIED_STUN:
+      case FighterState.HIT_STUN:
+      case FighterState.DODGE:
+      case FighterState.CLASH:
+      case FighterState.SIDESTEP:
+      case FighterState.DYING:
+        return true;
+      default:
+        return false;
+    }
   }
 
   updateRemoteView(dt) {
