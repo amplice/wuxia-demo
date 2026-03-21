@@ -25,6 +25,11 @@ import {
 const PORT = Number(process.env.MULTIPLAYER_PORT || process.env.PORT || 3010);
 const MAX_PLAYERS_PER_LOBBY = 2;
 const SNAPSHOT_INTERVAL_FRAMES = 3;
+const LOBBY_SWEEP_INTERVAL_MS = Number(process.env.LOBBY_SWEEP_INTERVAL_MS || 15000);
+const EMPTY_LOBBY_TTL_MS = Number(process.env.EMPTY_LOBBY_TTL_MS || 30000);
+const PUBLIC_LOBBY_IDLE_TTL_MS = Number(process.env.PUBLIC_LOBBY_IDLE_TTL_MS || 10 * 60 * 1000);
+const PRIVATE_LOBBY_IDLE_TTL_MS = Number(process.env.PRIVATE_LOBBY_IDLE_TTL_MS || 30 * 60 * 1000);
+const MATCH_COMPLETE_TTL_MS = Number(process.env.MATCH_COMPLETE_TTL_MS || 30000);
 
 class MatchRoom {
   constructor(lobby) {
@@ -196,6 +201,7 @@ class LobbyManager {
       code,
       visibility,
       createdAt: Date.now(),
+      updatedAt: Date.now(),
       phase: 'lobby',
       players: [this._createPlayer(client, 0)],
       room: null,
@@ -215,6 +221,7 @@ class LobbyManager {
 
     const slot = lobby.players.length;
     lobby.players.push(this._createPlayer(client, slot));
+    this._touchLobby(lobby);
     client.lobbyCode = code;
     client.slot = slot;
     return lobby;
@@ -230,6 +237,7 @@ class LobbyManager {
       .sort((a, b) => a.createdAt - b.createdAt)[0];
 
     if (lobby) {
+      this._touchLobby(lobby);
       return this.join(client, lobby.code);
     }
 
@@ -258,6 +266,7 @@ class LobbyManager {
     if (lobby.phase !== 'lobby') {
       throw new Error('Cannot change character after match start.');
     }
+    this._touchLobby(lobby);
     return lobby;
   }
 
@@ -271,6 +280,7 @@ class LobbyManager {
     } else if (lobby.phase !== 'match_running') {
       lobby.phase = 'lobby';
     }
+    this._touchLobby(lobby);
     return lobby;
   }
 
@@ -278,6 +288,7 @@ class LobbyManager {
     if (lobby.phase !== 'match_pending' || lobby.room) return lobby;
     lobby.room = new MatchRoom(lobby);
     lobby.room.start();
+    this._touchLobby(lobby);
     return lobby;
   }
 
@@ -287,6 +298,7 @@ class LobbyManager {
       throw new Error('Match has not started.');
     }
     lobby.room.setInput(client.id, input);
+    this._touchLobby(lobby);
     return lobby;
   }
 
@@ -303,10 +315,13 @@ class LobbyManager {
       lobby.room.stop('disconnect');
       lobby.room = null;
     }
+    this._compactLobby(lobby);
+    this._touchLobby(lobby);
     if (lobby.players.every((player) => !player.connected)) {
       this.lobbies.delete(code);
       return null;
     }
+    lobby.phase = lobby.players.length >= 2 ? 'match_pending' : 'lobby';
     return lobby;
   }
 
@@ -340,6 +355,51 @@ class LobbyManager {
     } while (this.lobbies.has(code));
     return code;
   }
+
+  _touchLobby(lobby) {
+    lobby.updatedAt = Date.now();
+  }
+
+  _compactLobby(lobby) {
+    lobby.players = lobby.players
+      .filter((player) => player.connected)
+      .map((player, slot) => {
+        player.slot = slot;
+        if (player.socket) {
+          player.socket.slot = slot;
+          player.socket.lobbyCode = lobby.code;
+        }
+        return player;
+      });
+  }
+
+  sweepExpiredLobbies(now = Date.now()) {
+    for (const [code, lobby] of this.lobbies) {
+      const connectedPlayers = lobby.players.filter((player) => player.connected).length;
+      const idleMs = now - (lobby.updatedAt || lobby.createdAt || now);
+
+      if (connectedPlayers === 0 && idleMs >= EMPTY_LOBBY_TTL_MS) {
+        if (lobby.room) lobby.room.stop('cleanup');
+        this.lobbies.delete(code);
+        continue;
+      }
+
+      if (lobby.phase === 'match_complete' && idleMs >= MATCH_COMPLETE_TTL_MS) {
+        if (lobby.room) lobby.room.stop('cleanup');
+        this.lobbies.delete(code);
+        continue;
+      }
+
+      if (!lobby.room && connectedPlayers < MAX_PLAYERS_PER_LOBBY) {
+        const idleLimit = lobby.visibility === 'public'
+          ? PUBLIC_LOBBY_IDLE_TTL_MS
+          : PRIVATE_LOBBY_IDLE_TTL_MS;
+        if (idleMs >= idleLimit) {
+          this.lobbies.delete(code);
+        }
+      }
+    }
+  }
 }
 
 function send(socket, payload) {
@@ -358,6 +418,16 @@ const server = http.createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+  if (req.url === '/') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({
+      name: 'ring-of-steel-multiplayer',
+      ok: true,
+      websocketPath: '/ws',
+      publicLobbySupport: true,
+    }));
     return;
   }
   res.writeHead(404);
@@ -460,6 +530,11 @@ wss.on('connection', (socket) => {
     broadcastPublicLobbyList();
   });
 });
+
+setInterval(() => {
+  lobbyManager.sweepExpiredLobbies();
+  broadcastPublicLobbyList();
+}, LOBBY_SWEEP_INTERVAL_MS).unref();
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[multiplayer] server listening on ws://0.0.0.0:${PORT}/ws`);
