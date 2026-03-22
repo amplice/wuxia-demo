@@ -108,6 +108,24 @@ Online bot-vs-bot match over the real websocket server:
 npm run multiplayer:bot-match -- --repeats=3 --p1-profile=hard --p2-profile=medium --p1-char=spearman --p2-char=ronin
 ```
 
+Online bot matrix:
+
+```powershell
+npm run multiplayer:bot-matrix -- --repeats=2 --brain=balance --profiles=hard,medium,easy --chars=spearman,ronin
+```
+
+The matrix runner is resilient by default:
+
+- failed matchups are recorded and the matrix continues
+- use `--fail-fast` only if you want the first failure to abort the run
+- use `--timeout-ms=...` to tighten or relax per-match timeout
+
+Analyze latest online bot result:
+
+```powershell
+npm run multiplayer:bot-analyze
+```
+
 Generate authoritative sampled tracks:
 
 ```powershell
@@ -170,8 +188,22 @@ Best use:
 
 - regression-test the real online input/session pipeline
 - catch authoritative lifecycle bugs that local self-play would miss
+- produce repeatable online result files in `analysis/`
+- run small online matrices locally or against the live Railway server
 
 Use balance findings carefully:
 
 - it is useful as a rough signal
 - but it is still less authoritative for balance than local self-play plus human playtests
+
+Recommended modes:
+
+- `scripted`
+  - best for online regression
+  - deterministic and decisive
+- `balance`
+  - best for rough online matchup signal
+  - profile-shaped but more decisive than the raw AI-over-snapshots path
+- `ai`
+  - still experimental in the online harness
+  - do not treat it as the main regression mode

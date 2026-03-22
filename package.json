@@ -16,7 +16,9 @@
     "generate:authoritative-tracks": "node scripts/generate-authoritative-tracks.mjs",
     "multiplayer:parity": "node scripts/check-fighter-parity.mjs",
     "multiplayer:check": "node scripts/check-multiplayer-safety.mjs",
-    "multiplayer:bot-match": "node scripts/online-bot-match.mjs"
+    "multiplayer:bot-match": "node scripts/online-bot-match.mjs",
+    "multiplayer:bot-matrix": "node scripts/online-bot-matrix.mjs",
+    "multiplayer:bot-analyze": "node scripts/analyze-online-bot.mjs"
   },
   "dependencies": {
     "three": "^0.171.0",

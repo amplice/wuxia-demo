@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import fs from 'node:fs';
+import path from 'node:path';
 import { WebSocket } from 'ws';
 import { AIController } from '../src/ai/AIController.js';
 import { resolveAIPersonality } from '../src/ai/AIPersonality.js';
@@ -13,6 +15,11 @@ import { getAttackData } from '../src/combat/AttackData.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const DEFAULT_LIVE_WS_URL = 'wss://ringofsteel-production.up.railway.app/ws';
+const ANALYSIS_DIR = path.join(PROJECT_ROOT, 'analysis');
+
+if (!fs.existsSync(ANALYSIS_DIR)) {
+  fs.mkdirSync(ANALYSIS_DIR, { recursive: true });
+}
 
 function parseArg(name, fallback = null) {
   const prefix = `--${name}=`;
@@ -25,6 +32,10 @@ function parseArg(name, fallback = null) {
 
 function hasFlag(name) {
   return process.argv.includes(`--${name}`);
+}
+
+function timestamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-');
 }
 
 function spawnProcess(command, args, extraEnv = {}) {
@@ -196,6 +207,8 @@ class OnlineBotClient {
       errors: [],
     };
     this._decisionTick = 0;
+    this._staleTicks = 0;
+    this._lastProgressSignature = '0:0';
   }
 
   async connect() {
@@ -342,6 +355,13 @@ class OnlineBotClient {
     if (this.phase !== 'match_running') return;
     if (!this.lastSnapshot || !this.shadowSelf || !this.shadowOpponent) return;
 
+    const progressSignature = `${this.metrics.combatEvents}:${this.metrics.roundTransitions}`;
+    if (progressSignature === this._lastProgressSignature) this._staleTicks++;
+    else {
+      this._staleTicks = 0;
+      this._lastProgressSignature = progressSignature;
+    }
+
     const frame = (this.lastSnapshot.frameCount ?? 0) + 1;
     const input = createEmptyInputFrame(frame);
     if (this.brain === 'ai') {
@@ -418,6 +438,17 @@ class OnlineBotClient {
     const close = dist <= ranges.close;
 
     if (!self.fsm.isActionable) return;
+
+    if (this._staleTicks > 40) {
+      if (!inRange) {
+        input.held.right = true;
+        return;
+      }
+      if (this._decisionTick % 5 === 0) input.pressed.heavy = true;
+      else if (this._decisionTick % 2 === 0 || !close) input.pressed.thrust = true;
+      else input.pressed.quick = true;
+      return;
+    }
 
     if (opponent.fsm.isAttacking && dist < ranges.engage + 0.3) {
       const defenseRoll = (this._decisionTick + this.slot) % 10;
@@ -543,6 +574,7 @@ async function runMatch({ url, p1Profile, p2Profile, p1Char, p2Char, p1Brain, p2
 
 async function main() {
   const repeats = Number(parseArg('repeats', '1'));
+  const timeoutMs = Number(parseArg('timeout-ms', '90000'));
   const p1Profile = parseArg('p1-profile', 'hard');
   const p2Profile = parseArg('p2-profile', 'hard');
   const p1Brain = parseArg('p1-brain', 'scripted');
@@ -551,6 +583,7 @@ async function main() {
   const p2Char = parseArg('p2-char', 'ronin');
   const explicitUrl = parseArg('server-url', null);
   const live = hasFlag('live');
+  const noSave = hasFlag('no-save');
   const defaultPort = live ? '3010' : String(3700 + Math.floor(Math.random() * 300));
   const port = Number(parseArg('port', defaultPort));
   const url = explicitUrl || (live ? DEFAULT_LIVE_WS_URL : `ws://127.0.0.1:${port}/ws`);
@@ -574,12 +607,15 @@ async function main() {
         p2Brain,
         p1Char,
         p2Char,
+        timeoutMs,
       }));
     }
 
     const summary = {
+      generatedAt: new Date().toISOString(),
       url,
       repeats,
+      timeoutMs,
       p1Profile,
       p2Profile,
       p1Brain,
@@ -615,6 +651,13 @@ async function main() {
         },
       },
     };
+
+    if (!noSave) {
+      const modeLabel = live || explicitUrl ? 'online-live' : 'online-local';
+      const outPath = path.join(ANALYSIS_DIR, `${modeLabel}-${timestamp()}.json`);
+      fs.writeFileSync(outPath, JSON.stringify(summary, null, 2));
+      summary.savedTo = outPath;
+    }
 
     console.log(JSON.stringify(summary, null, 2));
   } finally {
