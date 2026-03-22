@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { WebSocket } from 'ws';
 import { AIController } from '../src/ai/AIController.js';
+import { resolveAIPersonality } from '../src/ai/AIPersonality.js';
 import { FighterSim } from '../src/sim/FighterSim.js';
 import { CHARACTER_DEFS } from '../src/entities/CharacterDefs.js';
 import { DEFAULT_CHAR } from '../src/entities/CharacterDefs.js';
@@ -11,11 +12,15 @@ import { createEmptyInputFrame } from '../src/sim/InputFrame.js';
 import { getAttackData } from '../src/combat/AttackData.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../', import.meta.url));
+const DEFAULT_LIVE_WS_URL = 'wss://ringofsteel-production.up.railway.app/ws';
 
 function parseArg(name, fallback = null) {
   const prefix = `--${name}=`;
   const arg = process.argv.find((entry) => entry.startsWith(prefix));
-  return arg ? arg.slice(prefix.length) : fallback;
+  if (arg) return arg.slice(prefix.length);
+  const envKey = `npm_config_${name.replace(/-/g, '_')}`;
+  if (process.env[envKey] != null) return process.env[envKey];
+  return fallback;
 }
 
 function hasFlag(name) {
@@ -171,6 +176,7 @@ class OnlineBotClient {
     this.label = label;
     this.brain = brain;
     this.ai = new AIController(profile);
+    this.personality = resolveAIPersonality(profile).personality;
     this.ws = null;
     this.clientId = null;
     this.lobbyCode = null;
@@ -282,7 +288,9 @@ class OnlineBotClient {
         this.metrics.pongs++;
         break;
       case 'error':
-        this.metrics.errors.push(message.message);
+        if (message.message !== 'Match has not started.') {
+          this.metrics.errors.push(message.message);
+        }
         break;
       default:
         break;
@@ -340,6 +348,8 @@ class OnlineBotClient {
       const selfProxy = new BotFighterProxy(this.shadowSelf, input);
       const opponentProxy = new BotFighterProxy(this.shadowOpponent, createEmptyInputFrame(frame));
       this.ai.update(selfProxy, opponentProxy, this.lastSnapshot.frameCount ?? 0, FRAME_DURATION * 3);
+    } else if (this.brain === 'balance') {
+      this._balanceThink(input);
     } else {
       this._scriptedThink(input);
     }
@@ -395,6 +405,92 @@ class OnlineBotClient {
     }
 
     input.held.right = !close;
+  }
+
+  _balanceThink(input) {
+    this._decisionTick++;
+    const self = this.shadowSelf;
+    const opponent = this.shadowOpponent;
+    const p = this.personality;
+    const dist = self.distanceTo(opponent);
+    const ranges = self.charDef?.aiRanges || { engage: 2.5, close: 1.8 };
+    const inRange = dist <= ranges.engage + 0.1;
+    const close = dist <= ranges.close;
+
+    if (!self.fsm.isActionable) return;
+
+    if (opponent.fsm.isAttacking && dist < ranges.engage + 0.3) {
+      const defenseRoll = (this._decisionTick + this.slot) % 10;
+      const parryThreshold = Math.max(1, Math.round((p.parryRate + Math.max(0, p.parryBias || 0)) * 10));
+      const dodgeThreshold = Math.max(0, Math.round((p.dodgeRate + Math.max(0, p.sidestepBias || 0)) * 10));
+      if (defenseRoll < parryThreshold) {
+        input.pressed.block = true;
+        return;
+      }
+      if (defenseRoll < parryThreshold + dodgeThreshold) {
+        input.pressed[(this._decisionTick % 2 === 0) ? 'sidestepUp' : 'sidestepDown'] = true;
+        return;
+      }
+      input.held.block = true;
+      return;
+    }
+
+    if (!inRange) {
+      input.held.right = p.moveBackBias > 0.08 ? false : true;
+      input.held.left = p.moveBackBias > 0.12;
+      return;
+    }
+
+    if (close && p.spacingAwareness > 0.72 && this._decisionTick % 13 === 0) {
+      if (p.dodgeRate + Math.max(0, p.backstepBias || 0) > 0.24) {
+        input.pressed.backstep = true;
+      } else {
+        input.pressed[(this._decisionTick % 2 === 0) ? 'sidestepUp' : 'sidestepDown'] = true;
+      }
+      return;
+    }
+
+    const quickScore = 1 + (p.quickBias || 0) + p.aggression * 0.6 + (close ? 0.25 : 0);
+    const heavyScore = 0.55 + (p.heavyBias || 0) + p.heavyMixup * 0.8;
+    const thrustScore = 0.75 + (p.thrustBias || 0) + (!close ? 0.18 : 0);
+    const sidestepScore = Math.max(0, p.dodgeRate * 0.55 + (p.sidestepBias || 0));
+    const backstepScore = Math.max(0, p.dodgeRate * 0.28 + (p.backstepBias || 0));
+
+    const choices = [
+      ['quick', quickScore],
+      ['heavy', heavyScore],
+      ['thrust', thrustScore],
+      ['sidestep', sidestepScore],
+      ['backstep', backstepScore],
+    ];
+    const total = choices.reduce((sum, [, score]) => sum + Math.max(score, 0), 0) || 1;
+    let roll = ((this._decisionTick * 37) + (this.slot * 17)) % 1000 / 1000 * total;
+    for (const [choice, rawScore] of choices) {
+      const score = Math.max(rawScore, 0);
+      if (roll <= score) {
+        switch (choice) {
+          case 'heavy':
+            input.pressed.heavy = true;
+            return;
+          case 'thrust':
+            input.pressed.thrust = true;
+            return;
+          case 'sidestep':
+            input.pressed[(this._decisionTick % 2 === 0) ? 'sidestepUp' : 'sidestepDown'] = true;
+            return;
+          case 'backstep':
+            input.pressed.backstep = true;
+            return;
+          case 'quick':
+          default:
+            input.pressed.quick = true;
+            return;
+        }
+      }
+      roll -= score;
+    }
+
+    input.pressed.quick = true;
   }
 }
 
@@ -455,15 +551,16 @@ async function main() {
   const p2Char = parseArg('p2-char', 'ronin');
   const explicitUrl = parseArg('server-url', null);
   const live = hasFlag('live');
-  const port = Number(parseArg('port', live ? '3010' : '3710'));
-  const url = explicitUrl || `ws://127.0.0.1:${port}/ws`;
+  const defaultPort = live ? '3010' : String(3700 + Math.floor(Math.random() * 300));
+  const port = Number(parseArg('port', defaultPort));
+  const url = explicitUrl || (live ? DEFAULT_LIVE_WS_URL : `ws://127.0.0.1:${port}/ws`);
 
-  const server = explicitUrl ? null : spawnProcess('node', ['server/multiplayer-server.mjs'], {
+  const server = (explicitUrl || live) ? null : spawnProcess('node', ['server/multiplayer-server.mjs'], {
     MULTIPLAYER_PORT: String(port),
   });
 
   try {
-    if (!explicitUrl) {
+    if (!explicitUrl && !live) {
       await waitForHttp(`http://127.0.0.1:${port}/health`, 15000);
     }
 
@@ -495,6 +592,28 @@ async function main() {
         acc[key] = (acc[key] || 0) + 1;
         return acc;
       }, {}),
+      aggregate: {
+        averageLastFrame: Math.round(results.reduce((sum, result) => sum + (result.lastFrame || 0), 0) / Math.max(results.length, 1)),
+        killReasons: results.reduce((acc, result) => {
+          const key = result.killReason || 'unknown';
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {}),
+        averageScores: {
+          player1: Number((results.reduce((sum, result) => sum + (result.scores?.[0] ?? 0), 0) / Math.max(results.length, 1)).toFixed(2)),
+          player2: Number((results.reduce((sum, result) => sum + (result.scores?.[1] ?? 0), 0) / Math.max(results.length, 1)).toFixed(2)),
+        },
+        bot1: {
+          avgSnapshots: Number((results.reduce((sum, result) => sum + (result.bot1?.snapshots ?? 0), 0) / Math.max(results.length, 1)).toFixed(2)),
+          avgCombatEvents: Number((results.reduce((sum, result) => sum + (result.bot1?.combatEvents ?? 0), 0) / Math.max(results.length, 1)).toFixed(2)),
+          totalErrors: results.reduce((sum, result) => sum + (result.bot1?.errors?.length ?? 0), 0),
+        },
+        bot2: {
+          avgSnapshots: Number((results.reduce((sum, result) => sum + (result.bot2?.snapshots ?? 0), 0) / Math.max(results.length, 1)).toFixed(2)),
+          avgCombatEvents: Number((results.reduce((sum, result) => sum + (result.bot2?.combatEvents ?? 0), 0) / Math.max(results.length, 1)).toFixed(2)),
+          totalErrors: results.reduce((sum, result) => sum + (result.bot2?.errors?.length ?? 0), 0),
+        },
+      },
     };
 
     console.log(JSON.stringify(summary, null, 2));
