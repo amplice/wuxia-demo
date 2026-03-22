@@ -308,13 +308,26 @@ class LobbyManager {
     const lobby = this.lobbies.get(code);
     if (!lobby) return null;
 
+    if (lobby.room) {
+      const remainingSockets = lobby.players
+        .filter((player) => player.id !== client.id && player.connected && player.socket)
+        .map((player) => player.socket);
+      lobby.room.stop('disconnect');
+      lobby.room = null;
+      this.lobbies.delete(code);
+      for (const socket of remainingSockets) {
+        try {
+          socket.close(4000, 'Match closed');
+        } catch {
+          // Socket may already be closing.
+        }
+      }
+      return null;
+    }
+
     lobby.players = lobby.players.map((player) => (
       player.id === client.id ? { ...player, connected: false, ready: false } : player
     ));
-    if (lobby.room) {
-      lobby.room.stop('disconnect');
-      lobby.room = null;
-    }
     this._compactLobby(lobby);
     this._touchLobby(lobby);
     if (lobby.players.every((player) => !player.connected)) {

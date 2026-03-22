@@ -613,6 +613,13 @@ export class Game {
 
   _handleOnlineDisconnect(message) {
     if (this.mode !== 'online') return;
+    if (this.onlineSession) {
+      this._suppressOnlineClose = true;
+      this.onlineSession.disconnect();
+      queueMicrotask(() => {
+        this._suppressOnlineClose = false;
+      });
+    }
     this._startOnlineLobbyRefresh();
     this._cleanupFighters();
     this.matchSim = null;
