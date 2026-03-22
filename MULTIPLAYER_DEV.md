@@ -90,6 +90,24 @@ Browser smoke:
 npm run multiplayer:browser-smoke
 ```
 
+Public lobby / quick-match smoke:
+
+```powershell
+npm run multiplayer:public-ui-smoke
+```
+
+Disconnect smoke:
+
+```powershell
+npm run multiplayer:disconnect-smoke
+```
+
+Online bot-vs-bot match over the real websocket server:
+
+```powershell
+npm run multiplayer:bot-match -- --repeats=3 --p1-profile=hard --p2-profile=medium --p1-char=spearman --p2-char=ronin
+```
+
 Generate authoritative sampled tracks:
 
 ```powershell
@@ -101,3 +119,59 @@ Websocket endpoint:
 ```text
 ws://localhost:3010/ws
 ```
+
+## Multiplayer-Safe Workflow
+
+When adding or changing gameplay that can affect state, timing, movement, or animation:
+
+1. update the local/offline game logic
+2. update sampled authoritative tracks if the weapon/body path changed
+3. run the full multiplayer safety gate
+4. only then treat the change as safe to build on
+
+Full check:
+
+```powershell
+npm run multiplayer:check
+```
+
+That currently runs:
+
+- production build
+- authoritative parity check
+- websocket smoke
+- browser online smoke
+- public lobby / quick-match smoke
+- disconnect smoke
+
+Use the smaller commands during iteration, but before committing gameplay changes that touch combat or movement, the expectation should be that `multiplayer:check` passes.
+
+## What Codex Can Test
+
+Codex can test multiplayer in several real ways already:
+
+- headless websocket smoke against the real Node multiplayer server
+- two-browser online smoke against the real game client
+- public-lobby / quick-match browser smoke
+- disconnect handling smoke
+- server/client authoritative parity checks
+
+What this does **not** replace:
+
+- actual human-vs-human feel checks over real internet latency
+
+If stronger automated coverage is needed later, the next logical step is:
+
+- scripted online sparring clients that connect through the real websocket server and play repeated matches using either fixed input scripts or AI-driven input decisions
+
+That now exists in initial form via `multiplayer:bot-match`.
+
+Best use:
+
+- regression-test the real online input/session pipeline
+- catch authoritative lifecycle bugs that local self-play would miss
+
+Use balance findings carefully:
+
+- it is useful as a rough signal
+- but it is still less authoritative for balance than local self-play plus human playtests

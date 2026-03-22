@@ -123,7 +123,11 @@ async function waitForMatchReady(page, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const state = await readUiState(page);
-    if (state.gameState === 'fighting' && state.hasFighter1 && state.hasFighter2) {
+    if (
+      (state.gameState === 'fighting' || state.gameState === 'round_intro') &&
+      state.hasFighter1 &&
+      state.hasFighter2
+    ) {
       return;
     }
     await delay(100);

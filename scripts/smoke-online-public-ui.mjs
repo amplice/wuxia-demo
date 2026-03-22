@@ -160,6 +160,10 @@ async function waitForLobbyListRow(page, timeoutMs = 15000) {
   throw new Error('Timed out waiting for public lobby row.');
 }
 
+async function refreshLobbyList(page) {
+  await page.$eval('#online-refresh-btn', (el) => el.click());
+}
+
 async function waitForLobbyCode(page, timeoutMs = 15000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -214,6 +218,7 @@ async function runOne({ mode }) {
       console.log('[public-ui-smoke] host public clicked');
       const code = await waitForLobbyCode(hostPage);
       console.log(`[public-ui-smoke] host code ${code}`);
+      await refreshLobbyList(guestPage);
       await waitForLobbyListRow(guestPage);
       console.log('[public-ui-smoke] guest sees public row');
       await guestPage.$eval('#online-lobby-list .online-lobby-row .select-btn', (el) => el.click());

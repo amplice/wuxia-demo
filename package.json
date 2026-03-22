@@ -14,7 +14,9 @@
     "multiplayer:public-ui-smoke": "node scripts/smoke-online-public-ui.mjs",
     "multiplayer:disconnect-smoke": "node scripts/smoke-online-disconnect.mjs",
     "generate:authoritative-tracks": "node scripts/generate-authoritative-tracks.mjs",
-    "multiplayer:parity": "node scripts/check-fighter-parity.mjs"
+    "multiplayer:parity": "node scripts/check-fighter-parity.mjs",
+    "multiplayer:check": "node scripts/check-multiplayer-safety.mjs",
+    "multiplayer:bot-match": "node scripts/online-bot-match.mjs"
   },
   "dependencies": {
     "three": "^0.171.0",
