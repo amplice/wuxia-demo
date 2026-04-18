@@ -10,11 +10,13 @@ export class HUD {
     this.onlineStatus = document.getElementById('online-hud-status');
     this.onlineCode = document.getElementById('online-hud-code');
     this.onlinePing = document.getElementById('online-hud-ping');
+    this.stageBadge = document.getElementById('stage-hud-badge');
+    this.stageName = document.getElementById('stage-hud-name');
+    this.stageTagline = document.getElementById('stage-hud-tagline');
   }
 
   show() {
     this.el.style.display = 'block';
-    // Hide removed elements if they still exist in DOM
     const hide = (id) => { const el = document.getElementById(id); if (el) el.style.display = 'none'; };
     hide('p1-stance');
     hide('p2-stance');
@@ -32,6 +34,17 @@ export class HUD {
     this.onlineStatus.textContent = status;
     this.onlineCode.textContent = code || '------';
     this.onlinePing.textContent = Number.isFinite(pingMs) ? `${Math.round(pingMs)} ms` : '--';
+  }
+
+  setStage(stage = null) {
+    if (!this.stageBadge || !this.stageName || !this.stageTagline) return;
+    if (!stage) {
+      this.stageBadge.style.display = 'none';
+      return;
+    }
+    this.stageBadge.style.display = 'block';
+    this.stageName.textContent = stage.name;
+    this.stageTagline.textContent = stage.tagline;
   }
 
   updateRoundPips(p1Wins, p2Wins) {

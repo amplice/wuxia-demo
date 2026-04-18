@@ -38,12 +38,12 @@ export class OnlineSession extends EventTarget {
     this._lastPingSentAt = null;
   }
 
-  async createLobby(characterId = null, visibility = 'private') {
+  async createLobby(characterId = null, stageId = null, visibility = 'private') {
     await this._ensureConnected();
     if (visibility === 'public') {
-      this.client.createPublicLobby();
+      this.client.createPublicLobby(stageId);
     } else {
-      this.client.createLobby();
+      this.client.createLobby(stageId);
     }
     const lobby = await this._waitForEvent('lobby_state', (detail) => Boolean(detail?.code));
     if (characterId) this.client.setCharacter(characterId);
@@ -64,9 +64,9 @@ export class OnlineSession extends EventTarget {
     return this._waitForEvent('lobby_list');
   }
 
-  async quickMatch(characterId = null) {
+  async quickMatch(characterId = null, stageId = null) {
     await this._ensureConnected();
-    this.client.quickMatch();
+    this.client.quickMatch(stageId);
     const lobby = await this._waitForEvent('lobby_state', (detail) => Boolean(detail?.code));
     if (characterId) this.client.setCharacter(characterId);
     return lobby;

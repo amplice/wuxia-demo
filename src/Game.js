@@ -21,6 +21,7 @@ import { OnlineSession } from './net/OnlineSession.js';
 import { SoundManager } from './audio/SoundManager.js';
 import { listAudioAssets } from './audio/AudioCatalog.js';
 import { GameAudio } from './audio/GameAudio.js';
+import { DEFAULT_STAGE, getStageDef } from './arena/StageDefs.js';
 import {
   GameState, HitResult,
   FIGHT_START_DISTANCE, ROUNDS_TO_WIN, ROUND_INTRO_DURATION,
@@ -83,6 +84,7 @@ export class Game {
     // Match state
     this.mode = 'ai';
     this.difficulty = 'medium';
+    this.stageId = DEFAULT_STAGE;
     this.p1Score = 0;
     this.p2Score = 0;
     this.currentRound = 1;
@@ -101,8 +103,8 @@ export class Game {
     this.cameraController = new CameraController();
     this.camera = this.cameraController.camera;
 
-    this.arena = new Arena(this.scene);
-    this.environment = new Environment(this.scene);
+    this.arena = new Arena(this.scene, this.stageId);
+    this.environment = new Environment(this.scene, this.stageId);
     this.particles = new ParticleSystem(this.scene);
     this.debugOverlay = new DebugOverlay(this.scene);
 
@@ -154,7 +156,10 @@ export class Game {
         await this._startOnlineSession(config);
         return;
       }
-      this._startMatch(config.p1Char, config.p2Char);
+      this._startMatch(config.p1Char, config.p2Char, config.stageId);
+    };
+    this.ui.select.onStageChange = (stageId) => {
+      this._applyStage(stageId, { syncSelect: false });
     };
     this.ui.select.onModeChange = async (mode) => {
       if (mode === 'online') {
@@ -212,9 +217,10 @@ export class Game {
     return { animData, charDef: def, resolvedId: id };
   }
 
-  _startMatch(p1Char, p2Char) {
+  _startMatch(p1Char, p2Char, stageId = this.stageId) {
     this._disconnectOnlineSession();
     this._resetMatchScoreState();
+    const stage = this._applyStage(stageId);
 
     const { p1, p2 } = this._spawnFighters(p1Char, p2Char);
 
@@ -228,6 +234,7 @@ export class Game {
         playerChar: p1.charDef.id,
         aiChar: p2.charDef.id,
         difficulty: this.difficulty,
+        stageId: stage.id,
         aiMeta: this.aiController.getDebugSnapshot?.() ?? null,
       });
     } else {
@@ -240,6 +247,7 @@ export class Game {
     });
 
     this.ui.showHUD();
+    this.ui.hud.setStage(stage);
     this.ui.hud.updateRoundPips(0, 0);
     this.ui.hud.setOnlineMeta({ visible: false });
     this._startRound();
@@ -278,6 +286,7 @@ export class Game {
     this.gameAudio.resetFighterState([this.fighter1, this.fighter2]);
 
     this.ui.hud.reset();
+    this.ui.hud.setStage(getStageDef(this.stageId));
     this.ui.hud.updateRoundPips(this.p1Score, this.p2Score);
     this.ui.hud.showRoundAnnounce(this.currentRound);
     if (this.mode === 'ai' && this.fighter1 && this.fighter2) {
@@ -322,6 +331,18 @@ export class Game {
     this.screenEffects.reset();
   }
 
+  _applyStage(stageId, { syncSelect = true } = {}) {
+    const stage = getStageDef(stageId);
+    this.stageId = stage.id;
+    this.arena?.applyStage(stage.id);
+    this.environment?.applyStage(stage.id);
+    if (syncSelect) {
+      this.ui?.select?.setStage(stage.id, { silent: true });
+    }
+    this.ui?.hud?.setStage(stage);
+    return stage;
+  }
+
   _spawnFighters(p1Char, p2Char) {
     this._cleanupFighters();
 
@@ -354,6 +375,7 @@ export class Game {
   async _startOnlineSession(config) {
     this.mode = 'online';
     this.difficulty = config.difficulty ?? this.difficulty;
+    this._applyStage(config.stageId ?? this.stageId);
     const requestedUrl = config.serverUrl || undefined;
     const requestedCode = config.lobbyCode || '';
     this._stopOnlineLobbyRefresh();
@@ -396,7 +418,7 @@ export class Game {
       if (requestedCode) {
         await session.joinLobby(requestedCode, config.p1Char);
       } else {
-        await session.createLobby(config.p1Char);
+        await session.createLobby(config.p1Char, config.stageId);
       }
       session.setReady(true);
       this.ui.select.setOnlineBusy(false);
@@ -415,6 +437,7 @@ export class Game {
 
   async _hostPublicOnline(config) {
     this.mode = 'online';
+    this._applyStage(config.stageId ?? this.stageId);
     const requestedUrl = config.serverUrl || undefined;
     this._stopOnlineLobbyRefresh();
     this._disconnectDiscoverySession();
@@ -430,7 +453,7 @@ export class Game {
       this.onlineMatchPlayers = null;
       this._bindOnlineSession(session);
       await session.connect();
-      await session.createLobby(config.p1Char, 'public');
+      await session.createLobby(config.p1Char, config.stageId, 'public');
       session.setReady(true);
       this.ui.select.setOnlineBusy(false);
       this.ui.select.setOnlineLocked(true);
@@ -446,6 +469,7 @@ export class Game {
 
   async _startQuickMatch(config) {
     this.mode = 'online';
+    this._applyStage(config.stageId ?? this.stageId);
     const requestedUrl = config.serverUrl || undefined;
     this._stopOnlineLobbyRefresh();
     this._disconnectDiscoverySession();
@@ -461,7 +485,7 @@ export class Game {
       this.onlineMatchPlayers = null;
       this._bindOnlineSession(session);
       await session.connect();
-      await session.quickMatch(config.p1Char);
+      await session.quickMatch(config.p1Char, config.stageId);
       session.setReady(true);
       this.ui.select.setOnlineBusy(false);
       this.ui.select.setOnlineLocked(true);
@@ -560,6 +584,9 @@ export class Game {
 
   _handleOnlineLobbyState(detail) {
     if (!detail) return;
+    if (detail.stageId) {
+      this._applyStage(detail.stageId);
+    }
     this.onlineMatchPlayers = detail.players ?? null;
     this.ui.select.setOnlineLobbyInfo(detail);
     const self = detail.players?.find((player) => player.self);
@@ -593,6 +620,9 @@ export class Game {
 
   _handleOnlineMatchStart(detail) {
     if (!detail?.players) return;
+    if (detail.stageId) {
+      this._applyStage(detail.stageId);
+    }
     this.onlineMatchPlayers = detail.players;
     this.currentRound = detail.roundNumber ?? this.currentRound;
     if (Array.isArray(detail.scores)) {
@@ -621,6 +651,7 @@ export class Game {
     this.stateTimer = 0;
     this.ui.showHUD();
     this.ui.hud.reset();
+    this.ui.hud.setStage(getStageDef(this.stageId));
     this.ui.hud.updateRoundPips(this.p1Score, this.p2Score);
       this.ui.hud.setOnlineMeta({
         visible: true,
@@ -820,6 +851,8 @@ export class Game {
     if (this.fighter1 && this.fighter2) {
       this.gameAudio.updateFighters([this.fighter1, this.fighter2]);
       this.cameraController.update(dt, this.fighter1, this.fighter2);
+    } else {
+      this.cameraController.updateMenu(dt);
     }
 
     if (this.gameState === GameState.KILL_CAM) {

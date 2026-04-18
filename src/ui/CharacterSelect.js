@@ -1,5 +1,8 @@
 import { CHARACTER_DEFS, DEFAULT_CHAR } from '../entities/CharacterDefs.js';
 import { getDefaultMultiplayerWsUrl } from '../net/NetConfig.js';
+import { DEFAULT_STAGE, STAGE_IDS, getStageDef } from '../arena/StageDefs.js';
+
+const STORAGE_KEY = 'ringofsteel.select.v1';
 
 export class CharacterSelect {
   constructor() {
@@ -10,7 +13,14 @@ export class CharacterSelect {
     this.difficulty = 'medium';
     this.p1Char = DEFAULT_CHAR;
     this.p2Char = DEFAULT_CHAR;
+    this.stageId = DEFAULT_STAGE;
+    this.onStageChange = null;
+
     this.difficultySection = document.getElementById('difficulty-section');
+    this.stageSection = document.getElementById('stage-section');
+    this.stageContainer = document.getElementById('stage-options');
+    this.stageTitle = document.getElementById('stage-preview-title');
+    this.stageDescription = document.getElementById('stage-preview-description');
     this.onlineSection = document.getElementById('online-section');
     this.onlineServerUrl = document.getElementById('online-server-url');
     this.onlineLobbyCode = document.getElementById('online-lobby-code');
@@ -46,50 +56,51 @@ export class CharacterSelect {
       this.onlineServerUrl.value = getDefaultMultiplayerWsUrl();
     }
 
+    this._loadPreferences();
+
     this._setupButtons();
     this._buildCharButtons();
+    this._buildStageButtons();
+    this._syncModeButtons();
+    this._syncDifficultyButtons();
     this._updateModeUI();
     this.clearOnlineLobbyInfo();
+    this._updateStagePreview();
   }
 
   _setupButtons() {
-    // Mode buttons
-    document.querySelectorAll('#mode-options .select-btn').forEach(btn => {
+    document.querySelectorAll('#mode-options .select-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('#mode-options .select-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('#mode-options .select-btn').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         this.mode = btn.dataset.mode;
+        this._savePreferences();
         this._updateModeUI();
         if (this.onModeChange) this.onModeChange(this.mode);
       });
     });
 
-    // Difficulty buttons
-    document.querySelectorAll('#difficulty-options .select-btn').forEach(btn => {
+    document.querySelectorAll('#difficulty-options .select-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('#difficulty-options .select-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('#difficulty-options .select-btn').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         this.difficulty = btn.dataset.diff;
+        this._savePreferences();
       });
     });
 
-    // Start button
     document.getElementById('start-fight-btn').addEventListener('click', () => {
       if (this._onlineBusy) return;
       if (this.onConfirm) {
-        this.onConfirm({
-          mode: this.mode,
-          difficulty: this.difficulty,
-          p1Char: this.p1Char,
-          p2Char: this.p2Char,
-          serverUrl: this.onlineServerUrl?.value?.trim() || '',
-          lobbyCode: this.onlineLobbyCode?.value?.trim().toUpperCase() || '',
-        });
+        this.onConfirm(this._buildOnlineConfig());
       }
     });
 
     if (this.onlineLobbyCode) {
       this.onlineLobbyCode.addEventListener('input', () => this._updateStartButton());
+    }
+    if (this.onlineServerUrl) {
+      this.onlineServerUrl.addEventListener('change', () => this._savePreferences());
     }
     if (this.onlineHostPublicBtn) {
       this.onlineHostPublicBtn.addEventListener('click', () => {
@@ -135,8 +146,6 @@ export class CharacterSelect {
     if (!this.p1Container || !this.p2Container) return;
 
     const charIds = Object.keys(CHARACTER_DEFS);
-
-    // Hide character section if only one character
     const section = this.p1Container.closest('.select-section');
     if (charIds.length <= 1 && section) {
       section.style.display = 'none';
@@ -152,6 +161,24 @@ export class CharacterSelect {
     }
   }
 
+  _buildStageButtons() {
+    if (!this.stageContainer) return;
+    this.stageContainer.innerHTML = '';
+    for (const id of STAGE_IDS) {
+      const stage = getStageDef(id);
+      const btn = document.createElement('button');
+      btn.className = 'select-btn stage-select-btn' + (id === this.stageId ? ' active' : '');
+      btn.dataset.stage = id;
+      btn.innerHTML = `
+        <span class="stage-select-name">${stage.name}</span>
+        <span class="stage-select-tag">${stage.tagline}</span>
+      `;
+      btn.addEventListener('click', () => this.setStage(id));
+      this.stageContainer.appendChild(btn);
+    }
+    this._updateStageButtons();
+  }
+
   _createCharButton(id, label, playerIndex) {
     const btn = document.createElement('button');
     btn.className = 'select-btn';
@@ -163,16 +190,57 @@ export class CharacterSelect {
 
     btn.addEventListener('click', () => {
       const container = playerIndex === 1 ? this.p1Container : this.p2Container;
-      container.querySelectorAll('.select-btn').forEach(b => b.classList.remove('active'));
+      container.querySelectorAll('.select-btn').forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
       if (playerIndex === 1) {
         this.p1Char = id;
       } else {
         this.p2Char = id;
       }
+      this._savePreferences();
     });
 
     return btn;
+  }
+
+  setStage(stageId, { silent = false } = {}) {
+    const stage = getStageDef(stageId);
+    this.stageId = stage.id;
+    if (this.stageContainer) {
+      this.stageContainer.querySelectorAll('[data-stage]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.stage === stage.id);
+      });
+    }
+    this._updateStagePreview();
+    this._savePreferences();
+    if (!silent && this.onStageChange) {
+      this.onStageChange(stage.id);
+    }
+  }
+
+  _syncModeButtons() {
+    document.querySelectorAll('#mode-options .select-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.mode === this.mode);
+    });
+  }
+
+  _syncDifficultyButtons() {
+    document.querySelectorAll('#difficulty-options .select-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.diff === this.difficulty);
+    });
+  }
+
+  _updateStagePreview() {
+    const stage = getStageDef(this.stageId);
+    if (this.stageTitle) this.stageTitle.textContent = stage.name;
+    if (this.stageDescription) this.stageDescription.textContent = stage.description;
+  }
+
+  _updateStageButtons() {
+    const disabled = this.mode === 'online' && this._onlineLocked;
+    this.stageContainer?.querySelectorAll('[data-stage]').forEach((btn) => {
+      btn.disabled = disabled;
+    });
   }
 
   _updateOpponentLabel() {
@@ -198,6 +266,7 @@ export class CharacterSelect {
       this._updateStartButton();
     }
     this._updateOnlineButtons();
+    this._updateStageButtons();
     this._updateOpponentLabel();
   }
 
@@ -250,6 +319,7 @@ export class CharacterSelect {
       difficulty: this.difficulty,
       p1Char: this.p1Char,
       p2Char: this.p2Char,
+      stageId: this.stageId,
       serverUrl: this.onlineServerUrl?.value?.trim() || '',
       lobbyCode: this.onlineLobbyCode?.value?.trim().toUpperCase() || '',
     };
@@ -276,12 +346,14 @@ export class CharacterSelect {
       const row = document.createElement('div');
       row.className = 'online-lobby-row';
 
+      const stage = getStageDef(lobby.stageId);
       const main = document.createElement('div');
       main.className = 'online-lobby-main';
       main.innerHTML = `
         <span class="emphasis">${lobby.code}</span>
         <span>${lobby.playerCount}/${lobby.maxPlayers} Players</span>
         <span>${String(lobby.hostCharacterId || 'unknown').replace('_', ' ')}</span>
+        <span>${stage.name}</span>
       `;
 
       const joinBtn = document.createElement('button');
@@ -321,6 +393,9 @@ export class CharacterSelect {
     const players = Array.isArray(detail?.players) ? detail.players : [];
     this._setOnlineSlotState(this.onlineLobbySlot1, players.find((player) => player.slot === 0) ?? null, 0);
     this._setOnlineSlotState(this.onlineLobbySlot2, players.find((player) => player.slot === 1) ?? null, 1);
+    if (detail?.stageId) {
+      this.setStage(detail.stageId, { silent: true });
+    }
   }
 
   clearOnlineLobbyInfo() {
@@ -347,6 +422,7 @@ export class CharacterSelect {
     this._onlineBusy = Boolean(busy);
     this._updateStartButton();
     this._updateOnlineButtons();
+    this._updateStageButtons();
     this._renderPublicLobbies();
   }
 
@@ -356,6 +432,7 @@ export class CharacterSelect {
     if (this.onlineLobbyCode) this.onlineLobbyCode.readOnly = this._onlineLocked;
     this._updateStartButton();
     this._updateOnlineButtons();
+    this._updateStageButtons();
     this._renderPublicLobbies();
   }
 
@@ -367,12 +444,14 @@ export class CharacterSelect {
     this.clearOnlineLobbyInfo();
     this._updateStartButton();
     this._updateOnlineButtons();
+    this._updateStageButtons();
     this._renderPublicLobbies();
   }
 
   show() {
     this.el.style.display = 'flex';
     this._updateModeUI();
+    this._updateStagePreview();
     this._setControlsOpen(false);
     window.addEventListener('keydown', this._keyHandler);
   }
@@ -386,6 +465,47 @@ export class CharacterSelect {
   _setControlsOpen(open) {
     if (!this.controlsModal) return;
     this.controlsModal.classList.toggle('open', open);
+  }
+
+  _loadPreferences() {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (saved.mode === 'ai' || saved.mode === 'pvp' || saved.mode === 'online') {
+        this.mode = saved.mode;
+      }
+      if (saved.difficulty === 'easy' || saved.difficulty === 'medium' || saved.difficulty === 'hard') {
+        this.difficulty = saved.difficulty;
+      }
+      if (typeof saved.p1Char === 'string' && CHARACTER_DEFS[saved.p1Char]) {
+        this.p1Char = saved.p1Char;
+      }
+      if (typeof saved.p2Char === 'string' && CHARACTER_DEFS[saved.p2Char]) {
+        this.p2Char = saved.p2Char;
+      }
+      this.stageId = getStageDef(saved.stageId).id;
+      if (typeof saved.serverUrl === 'string' && this.onlineServerUrl) {
+        this.onlineServerUrl.value = saved.serverUrl;
+      }
+    } catch {
+      // Ignore malformed local preferences and fall back to defaults.
+    }
+  }
+
+  _savePreferences() {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        mode: this.mode,
+        difficulty: this.difficulty,
+        p1Char: this.p1Char,
+        p2Char: this.p2Char,
+        stageId: this.stageId,
+        serverUrl: this.onlineServerUrl?.value?.trim() || '',
+      }));
+    } catch {
+      // Ignore storage failures.
+    }
   }
 
   _onKey(e) {

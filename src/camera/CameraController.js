@@ -29,6 +29,7 @@ export class CameraController {
     this.killCamKiller = null;
     this.killCamTime = 0;
     this.killCamPhase = 'freeze'; // 'freeze' | 'zoom' | 'orbit'
+    this.menuOrbitTime = 0;
 
     window.addEventListener('resize', () => this.onResize());
   }
@@ -92,6 +93,34 @@ export class CameraController {
       this.camera.position.x += (Math.random() - 0.5) * this.shakeIntensity;
       this.camera.position.y += (Math.random() - 0.5) * this.shakeIntensity;
       this.shakeIntensity *= this.shakeDecay;
+    }
+
+    this.camera.lookAt(this.currentLookAt);
+  }
+
+  updateMenu(dt) {
+    if (this.killCamActive) {
+      this._updateKillCam(dt);
+      return;
+    }
+
+    this.menuOrbitTime += dt * 0.22;
+    const radius = 9.4;
+    const height = 3.4 + Math.sin(this.menuOrbitTime * 1.3) * 0.18;
+    const targetPosition = new THREE.Vector3(
+      Math.cos(this.menuOrbitTime) * radius,
+      height,
+      Math.sin(this.menuOrbitTime) * radius
+    );
+    const targetLookAt = new THREE.Vector3(0, 0.9, 0);
+
+    if (this._needsSnap) {
+      this.camera.position.copy(targetPosition);
+      this.currentLookAt.copy(targetLookAt);
+      this._needsSnap = false;
+    } else {
+      this.camera.position.lerp(targetPosition, 0.03);
+      this.currentLookAt.lerp(targetLookAt, 0.08);
     }
 
     this.camera.lookAt(this.currentLookAt);
@@ -212,6 +241,7 @@ export class CameraController {
     this.killCamKiller = null;
     this._killLastTime = null;
     this.orbitAngle = 0;
+    this.menuOrbitTime = 0;
     this._needsSnap = true;
   }
 }

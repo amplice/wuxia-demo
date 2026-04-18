@@ -317,11 +317,69 @@
       gap: 12px;
       margin-bottom: 0;
     }
+    .stage-options {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(240px, 1fr));
+      gap: 14px;
+      width: min(920px, 94vw);
+    }
+    .stage-select-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      min-height: 86px;
+      padding: 14px 16px;
+      text-align: left;
+    }
+    .stage-select-name {
+      font-size: 15px;
+      letter-spacing: 3px;
+      color: #f2d6a0;
+    }
+    .stage-select-tag {
+      font-size: 11px;
+      letter-spacing: 1px;
+      color: #98abc8;
+      text-transform: none;
+      line-height: 1.35;
+    }
+    .stage-preview {
+      margin-top: 14px;
+      padding: 14px 16px;
+      background: linear-gradient(180deg, rgba(13, 18, 26, 0.88), rgba(9, 10, 16, 0.94));
+      border: 1px solid rgba(143, 183, 255, 0.16);
+      text-align: left;
+    }
+    .stage-preview .label {
+      display: block;
+      color: var(--ui-gold-dim);
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .stage-preview .stage-title {
+      font-size: 18px;
+      color: #f3dfb8;
+      letter-spacing: 4px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    .stage-preview .stage-description {
+      color: #a7b3c9;
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 720px;
+    }
 
     @media (max-width: 720px) {
       .char-select-grid {
         grid-template-columns: 1fr;
         gap: 20px;
+      }
+      .stage-options {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -650,6 +708,42 @@
     }
     .online-hud-strip .value {
       color: #ffffff;
+    }
+    .stage-hud-badge {
+      position: absolute;
+      top: 62px;
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: 260px;
+      padding: 10px 16px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(15, 18, 26, 0.9), rgba(8, 10, 14, 0.95));
+      border: 1px solid rgba(255, 225, 171, 0.18);
+      box-shadow: var(--ui-shadow);
+      pointer-events: none;
+    }
+    .stage-hud-badge .label {
+      display: block;
+      color: var(--ui-gold-dim);
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .stage-hud-badge .value {
+      display: block;
+      color: #f0ddb6;
+      font-size: 15px;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .stage-hud-badge .tagline {
+      display: block;
+      color: #9aa9c6;
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: none;
     }
     .fighter-hud {
       position: absolute;
@@ -1024,6 +1118,16 @@
         </div>
       </div>
 
+      <div class="select-section" id="stage-section">
+        <h3>Stage</h3>
+        <div class="stage-options" id="stage-options"></div>
+        <div class="stage-preview">
+          <span class="label">Current Arena</span>
+          <div class="stage-title" id="stage-preview-title">EMBER KEEP</div>
+          <div class="stage-description" id="stage-preview-description">A warm dueling ring framed by braziers, brass trim, and drifting embers.</div>
+        </div>
+      </div>
+
       <div class="select-section" id="online-section" style="display: none;">
         <h3>Online Match</h3>
         <div class="online-public-actions">
@@ -1126,6 +1230,11 @@
         <span class="value" id="online-hud-code">------</span>
         <span class="label">Ping</span>
         <span class="value" id="online-hud-ping">--</span>
+      </div>
+      <div class="stage-hud-badge" id="stage-hud-badge">
+        <span class="label">Arena</span>
+        <span class="value" id="stage-hud-name">EMBER KEEP</span>
+        <span class="tagline" id="stage-hud-tagline">Bronze court under furnace light</span>
       </div>
       <div class="fighter-hud p1">
         <div class="fighter-name">PLAYER 1</div>

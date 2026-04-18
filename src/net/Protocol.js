@@ -1,4 +1,5 @@
 import { createEmptyInputFrame, INPUT_HELD_ACTIONS, INPUT_PRESSED_ACTIONS } from '../sim/InputFrame.js';
+import { DEFAULT_STAGE, isValidStageId } from '../arena/StageDefs.js';
 
 export const ClientMessageType = Object.freeze({
   CREATE_LOBBY: 'create_lobby',
@@ -44,16 +45,20 @@ export function validateClientMessage(message) {
 
   switch (message.type) {
     case ClientMessageType.CREATE_LOBBY:
-      return message.visibility == null || message.visibility === 'public' || message.visibility === 'private'
+      return (message.visibility == null || message.visibility === 'public' || message.visibility === 'private') &&
+        (message.stageId == null || isValidStageId(message.stageId))
         ? { ok: true }
-        : { ok: false, error: 'Lobby visibility must be public or private.' };
+        : { ok: false, error: 'Lobby visibility must be public/private and stage must be valid.' };
     case ClientMessageType.JOIN_LOBBY:
       return typeof message.code === 'string' && message.code.trim()
         ? { ok: true }
         : { ok: false, error: 'Lobby code is required.' };
     case ClientMessageType.LIST_LOBBIES:
-    case ClientMessageType.QUICK_MATCH:
       return { ok: true };
+    case ClientMessageType.QUICK_MATCH:
+      return message.stageId == null || isValidStageId(message.stageId)
+        ? { ok: true }
+        : { ok: false, error: 'Stage id is invalid.' };
     case ClientMessageType.SELECT_CHARACTER:
       return typeof message.characterId === 'string' && message.characterId.trim()
         ? { ok: true }
@@ -78,6 +83,7 @@ export function createLobbyStatePayload(lobby, selfId = null) {
     type: ServerMessageType.LOBBY_STATE,
     code: lobby.code,
     visibility: lobby.visibility,
+    stageId: lobby.stageId || DEFAULT_STAGE,
     players: lobby.players.map((player) => ({
       id: player.id,
       slot: player.slot,
@@ -97,6 +103,7 @@ export function createLobbyListPayload(lobbies) {
     lobbies: lobbies.map((lobby) => ({
       code: lobby.code,
       visibility: lobby.visibility,
+      stageId: lobby.stageId || DEFAULT_STAGE,
       phase: lobby.phase,
       playerCount: lobby.players.filter((player) => player.connected).length,
       maxPlayers: 2,

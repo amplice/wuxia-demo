@@ -3,6 +3,7 @@ import http from 'http';
 import crypto from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { CHARACTER_DEFS, DEFAULT_CHAR } from '../src/entities/CharacterDefs.js';
+import { DEFAULT_STAGE, getStageDef } from '../src/arena/StageDefs.js';
 import {
   FRAME_DURATION,
   FIGHT_START_DISTANCE,
@@ -82,6 +83,7 @@ class MatchRoom {
         id: player.id,
         characterId: player.characterId,
       })),
+      stageId: this.lobby.stageId,
     });
 
     for (const player of this.lobby.players) {
@@ -92,6 +94,7 @@ class MatchRoom {
       type: ServerMessageType.MATCH_START,
       code: this.lobby.code,
       phase: this.lobby.phase,
+      stageId: this.lobby.stageId,
       roundNumber: this.roundNumber,
       scores: [...this.scores],
       players: this.lobby.players.map((player) => ({
@@ -233,12 +236,14 @@ class LobbyManager {
     this.lobbies = new Map();
   }
 
-  create(client, { visibility = 'private' } = {}) {
+  create(client, { visibility = 'private', stageId = DEFAULT_STAGE } = {}) {
     this._ensureClientFree(client);
     const code = this._generateCode();
+    const stage = getStageDef(stageId);
     const lobby = {
       code,
       visibility,
+      stageId: stage.id,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       phase: 'lobby',
@@ -250,6 +255,7 @@ class LobbyManager {
     log('lobby_created', {
       code,
       visibility,
+      stageId: stage.id,
       hostId: client.id,
     });
     client.lobbyCode = code;
@@ -278,7 +284,7 @@ class LobbyManager {
     return lobby;
   }
 
-  quickMatch(client) {
+  quickMatch(client, stageId = DEFAULT_STAGE) {
     this._ensureClientFree(client);
     const lobby = [...this.lobbies.values()]
       .filter((entry) =>
@@ -292,7 +298,7 @@ class LobbyManager {
       return this.join(client, lobby.code);
     }
 
-    return this.create(client, { visibility: 'public' });
+    return this.create(client, { visibility: 'public', stageId });
   }
 
   listPublicLobbies() {
@@ -566,7 +572,10 @@ wss.on('connection', (socket) => {
     try {
       switch (message.type) {
         case ClientMessageType.CREATE_LOBBY: {
-          const lobby = lobbyManager.create(socket, { visibility: message.visibility ?? 'private' });
+          const lobby = lobbyManager.create(socket, {
+            visibility: message.visibility ?? 'private',
+            stageId: message.stageId ?? DEFAULT_STAGE,
+          });
           broadcastLobby(lobby);
           broadcastPublicLobbyList();
           break;
@@ -581,7 +590,7 @@ wss.on('connection', (socket) => {
           send(socket, createLobbyListPayload(lobbyManager.listPublicLobbies()));
           break;
         case ClientMessageType.QUICK_MATCH: {
-          const lobby = lobbyManager.quickMatch(socket);
+          const lobby = lobbyManager.quickMatch(socket, message.stageId ?? DEFAULT_STAGE);
           broadcastLobby(lobby);
           broadcastPublicLobbyList();
           break;

@@ -1,94 +1,115 @@
 import * as THREE from 'three';
+import { getStageDef } from './StageDefs.js';
 
 export class Environment {
-  constructor(scene) {
+  constructor(scene, stageId = null) {
     this.scene = scene;
-    this._setupLights();
-    this._setupFog();
-    this._setupParticles();
+    this.group = new THREE.Group();
+    this.scene.add(this.group);
+    this.particles = null;
+    this.stageId = null;
+    this.applyStage(stageId);
   }
 
-  _setupLights() {
-    // Hemisphere light (sky/ground)
-    const hemi = new THREE.HemisphereLight(0x8888aa, 0x333322, 0.6);
-    this.scene.add(hemi);
+  applyStage(stageId) {
+    const stage = getStageDef(typeof stageId === 'string' ? stageId : stageId?.id);
+    if (this.stageId === stage.id) return stage;
+    this.stageId = stage.id;
+    this._disposeGroup(this.group);
+    this.group.clear();
+    this._setupLighting(stage);
+    this._setupFog(stage);
+    this._setupParticles(stage);
+    return stage;
+  }
 
-    // Main directional (sun-like, for shadows)
-    const dir = new THREE.DirectionalLight(0xffeedd, 1.2);
-    dir.position.set(5, 10, 5);
+  _disposeGroup(group) {
+    group.traverse((child) => {
+      if (child.geometry?.dispose) child.geometry.dispose();
+      if (Array.isArray(child.material)) {
+        child.material.forEach((material) => material?.dispose?.());
+      } else if (child.material?.dispose) {
+        child.material.dispose();
+      }
+    });
+  }
+
+  _setupLighting(stage) {
+    const env = stage.environment;
+
+    const hemi = new THREE.HemisphereLight(env.hemiSky, env.hemiGround, env.hemiIntensity);
+    this.group.add(hemi);
+
+    const dir = new THREE.DirectionalLight(env.mainLightColor, env.mainLightIntensity);
+    dir.position.set(...env.mainLightPosition);
     dir.castShadow = true;
     dir.shadow.mapSize.width = 2048;
     dir.shadow.mapSize.height = 2048;
     dir.shadow.camera.near = 1;
-    dir.shadow.camera.far = 30;
+    dir.shadow.camera.far = 32;
     dir.shadow.camera.left = -12;
     dir.shadow.camera.right = 12;
     dir.shadow.camera.top = 12;
     dir.shadow.camera.bottom = -12;
     dir.shadow.bias = -0.00035;
     dir.shadow.normalBias = 0.008;
-    this.scene.add(dir);
+    this.group.add(dir);
 
-    // Rim light (from behind)
-    const rim = new THREE.DirectionalLight(0x6688aa, 0.4);
-    rim.position.set(-3, 5, -8);
-    this.scene.add(rim);
+    const rim = new THREE.DirectionalLight(env.rimLightColor, env.rimLightIntensity);
+    rim.position.set(...env.rimLightPosition);
+    this.group.add(rim);
 
-    // Ambient fill
-    const ambient = new THREE.AmbientLight(0x222233, 0.3);
-    this.scene.add(ambient);
+    const ambient = new THREE.AmbientLight(env.ambientColor, env.ambientIntensity);
+    this.group.add(ambient);
   }
 
-  _setupFog() {
-    this.scene.fog = new THREE.FogExp2(0x111118, 0.04);
-    this.scene.background = new THREE.Color(0x111118);
+  _setupFog(stage) {
+    const env = stage.environment;
+    this.scene.fog = new THREE.FogExp2(env.fogColor, env.fogDensity);
+    this.scene.background = new THREE.Color(env.background);
   }
 
-  _setupParticles() {
-    // Floating dust / petal particles
-    const count = 40;
+  _setupParticles(stage) {
+    const env = stage.environment;
+    const count = env.particleCount;
     const geo = new THREE.BufferGeometry();
     const positions = new Float32Array(count * 3);
-    const sizes = new Float32Array(count);
 
     for (let i = 0; i < count; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 20;
-      positions[i * 3 + 1] = Math.random() * 8;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 20;
-      sizes[i] = Math.random() * 3 + 1;
+      positions[i * 3] = (Math.random() - 0.5) * env.particleSpread;
+      positions[i * 3 + 1] = Math.random() * env.particleHeight;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * env.particleSpread;
     }
 
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
     const mat = new THREE.PointsMaterial({
-      color: 0xaa9977,
-      size: 0.05,
+      color: env.particleColor,
+      size: env.particleSize,
       transparent: true,
-      opacity: 0.3,
+      opacity: env.particleOpacity,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
 
     this.particles = new THREE.Points(geo, mat);
-    this.scene.add(this.particles);
+    this.group.add(this.particles);
   }
 
   update(dt) {
-    // Slowly drift particles
-    if (this.particles) {
-      const posAttr = this.particles.geometry.getAttribute('position');
-      for (let i = 0; i < posAttr.count; i++) {
-        let y = posAttr.getY(i);
-        y += dt * 0.1;
-        if (y > 8) y = 0;
-        posAttr.setY(i, y);
+    if (!this.particles) return;
+    const env = getStageDef(this.stageId).environment;
+    const posAttr = this.particles.geometry.getAttribute('position');
+    for (let i = 0; i < posAttr.count; i++) {
+      let y = posAttr.getY(i);
+      y += dt * env.particleRiseSpeed;
+      if (y > env.particleHeight) y = 0;
+      posAttr.setY(i, y);
 
-        let x = posAttr.getX(i);
-        x += Math.sin(y * 0.5 + i) * dt * 0.05;
-        posAttr.setX(i, x);
-      }
-      posAttr.needsUpdate = true;
+      const sway = Math.sin(y * 0.55 + i * 0.75);
+      const x = posAttr.getX(i) + sway * dt * env.particleDrift;
+      posAttr.setX(i, x);
     }
+    posAttr.needsUpdate = true;
   }
 }
