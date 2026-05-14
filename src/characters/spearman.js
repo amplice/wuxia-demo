@@ -121,5 +121,5 @@ export const spearman = defineCharacter('spearman', {
   defenseStoutness: 0.9,
   sidestepDistance: 1.2,
   stepDistance: 0.95,
-  bodySeparation: 1.6,
+  bodySeparation: 1.9,
 });

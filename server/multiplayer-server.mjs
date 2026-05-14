@@ -71,8 +71,8 @@ class MatchRoom {
     const [p1, p2] = this.lobby.players;
     const fighter1 = new FighterSim(0, p1.characterId, CHARACTER_DEFS[p1.characterId]);
     const fighter2 = new FighterSim(1, p2.characterId, CHARACTER_DEFS[p2.characterId]);
-    this.sim = new MatchSim({ fighter1, fighter2 });
-    this.sim.startRound(FIGHT_START_DISTANCE);
+    this.sim = new MatchSim({ fighter1, fighter2, stageId: this.lobby.stageId });
+    this.sim.startRound(getStageDef(this.lobby.stageId).startDistance ?? FIGHT_START_DISTANCE);
     this.lobby.phase = 'match_running';
     metrics.totalMatchesStarted++;
     log('match_started', {

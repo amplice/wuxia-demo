@@ -3,6 +3,7 @@ import * as THREE from 'three';
 export class Renderer {
   constructor() {
     this.renderer = null;
+    this.postProcessor = null;
   }
 
   async init() {
@@ -27,9 +28,19 @@ export class Renderer {
 
   onResize() {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.postProcessor?.onResize?.();
   }
 
-  render(scene, camera) {
+  setPostProcessor(postProcessor) {
+    this.postProcessor = postProcessor ?? null;
+    this.postProcessor?.onResize?.();
+  }
+
+  render(scene, camera, dt = 0) {
+    if (this.postProcessor) {
+      this.postProcessor.render(scene, camera, dt);
+      return;
+    }
     this.renderer.render(scene, camera);
   }
 

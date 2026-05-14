@@ -2,6 +2,7 @@ import { resolveAIPersonality } from './AIPersonality.js';
 import { FighterState, AttackType } from '../core/Constants.js';
 import { getAttackData } from '../combat/AttackData.js';
 import { getDefensiveTimingWindow } from './TimingRead.js';
+import { getArenaEdgeDistance } from '../arena/ArenaBounds.js';
 
 const MAX_BLOCK_FRAMES = 40; // ~0.67s max block hold
 const ATTACK_FRONT_DOT_MIN = 0.55;
@@ -19,6 +20,24 @@ const ATTACK_SCORE_MIN = 0.06;
 const SPEARMAN_HEAVY_SCORE_MIN = 0.2;
 const AI_PARRY_PUNISH_DELAY_MIN = 2;
 const AI_PARRY_PUNISH_DELAY_MAX = 5;
+const PASSIVE_TARGET_FRAMES = 42;
+const PASSIVE_TARGET_STRONG_FRAMES = 96;
+
+function isOpponentActiveState(state) {
+  return state === FighterState.WALK_FORWARD ||
+    state === FighterState.WALK_BACK ||
+    state === FighterState.BLOCK ||
+    state === FighterState.BLOCK_STUN ||
+    state === FighterState.PARRY ||
+    state === FighterState.PARRY_SUCCESS ||
+    state === FighterState.SIDESTEP ||
+    state === FighterState.DODGE ||
+    state === FighterState.ATTACK_ACTIVE ||
+    state === FighterState.ATTACK_RECOVERY ||
+    state === FighterState.HIT_STUN ||
+    state === FighterState.PARRIED_STUN ||
+    state === FighterState.CLASH;
+}
 
 function getFighterClassId(fighter) {
   return fighter?.charDef?.id ?? fighter?.charId ?? null;
@@ -51,6 +70,9 @@ export class AIController {
     this._mobilityFatigue = 0;
     this._lastObservedDist = null;
     this._lastObservedSideDot = 0;
+    this._opponentLastPosition = null;
+    this._opponentLastMotionFrame = -9999;
+    this._opponentLastActiveFrame = -9999;
     this._recentApproachFrame = -9999;
     this._recentLateralThreatFrame = -9999;
     this._sidestepPunishCount = 0;
@@ -128,7 +150,24 @@ export class AIController {
   }
 
   _trackOpponent(opponent, frameCount) {
+    const currentPos = { x: opponent.position.x, z: opponent.position.z };
+    if (!this._opponentLastPosition) {
+      this._opponentLastPosition = currentPos;
+      this._opponentLastMotionFrame = frameCount;
+      this._opponentLastActiveFrame = frameCount;
+    }
+
+    const dx = currentPos.x - this._opponentLastPosition.x;
+    const dz = currentPos.z - this._opponentLastPosition.z;
+    const moved = (dx * dx + dz * dz) >= (0.02 * 0.02);
     const state = opponent.state;
+    if (moved) {
+      this._opponentLastMotionFrame = frameCount;
+      this._opponentLastActiveFrame = frameCount;
+    }
+    if (opponent.fsm.isAttacking || isOpponentActiveState(state)) {
+      this._opponentLastActiveFrame = frameCount;
+    }
     if (state !== this._opponentLastState) {
       if (state === FighterState.BLOCK || state === FighterState.BLOCK_STUN) {
         this._opponentBlockCount++;
@@ -142,6 +181,7 @@ export class AIController {
       }
       this._opponentLastState = state;
     }
+    this._opponentLastPosition = currentPos;
 
     this._decayTimer++;
     if (this._decayTimer > 300) {
@@ -243,6 +283,7 @@ export class AIController {
     const dist = fighter.distanceTo(opponent);
     const engagement = this._getEngagementContext(fighter, opponent, dist);
     const motionRead = this._getOpponentMotionRead(frameCount);
+    const passiveTarget = motionRead.passiveTarget;
     const defensiveWindow = getDefensiveTimingWindow(fighter, opponent);
 
     if (!this._isPlannedAttackStillValid(fighter, opponent, plan, engagement, dist, motionRead, defensiveWindow)) {
@@ -296,9 +337,9 @@ export class AIController {
     const noise = () => (Math.random() - 0.5) * p.decisionNoise;
     const engagement = this._getEngagementContext(fighter, opponent, dist);
 
-    const edgeDist = Math.sqrt(fighter.position.x ** 2 + fighter.position.z ** 2);
-    const nearEdge = edgeDist > 4.0;
-    const dangerEdge = edgeDist > 6.0;
+    const edgeRoom = getArenaEdgeDistance(fighter.position.x, fighter.position.z);
+    const nearEdge = edgeRoom < 4.0;
+    const dangerEdge = edgeRoom < 2.0;
 
     const scores = {};
 
@@ -508,6 +549,31 @@ export class AIController {
       scores.moveForward = (scores.moveForward || 0) + 0.6 + p.aggression * 0.3 + (p.moveForwardBias || 0) + noise();
       if (heavySpecialist && dist < ranges.engage + 0.9) {
         scores.moveForward += 0.2;
+      }
+    }
+
+    if (passiveTarget && !opponentAttacking && !opponentVulnerable) {
+      const passiveBoost = motionRead.strongPassiveTarget ? 0.42 : 0.24;
+      scores.block = (scores.block || 0) - (0.36 + passiveBoost * 0.2);
+      scores.sidestep = (scores.sidestep || 0) - (0.24 + passiveBoost * 0.15);
+      scores.backstep = (scores.backstep || 0) - (0.34 + passiveBoost * 0.2);
+      scores.moveBack = (scores.moveBack || 0) - (0.28 + passiveBoost * 0.2);
+      scores.idle = (scores.idle || 0) - (0.2 + passiveBoost * 0.15);
+
+      if (dist > Math.min(quickDecisionReach, thrustDecisionReach) + 0.03) {
+        scores.moveForward = (scores.moveForward || 0) + 0.5 + passiveBoost;
+      }
+
+      if (engagement.forwardDot >= 0.9) {
+        if (dist <= quickDecisionReach + 0.02) {
+          scores.quickAttack = (scores.quickAttack || 0) + 0.22 + passiveBoost * 0.2;
+        }
+        if (dist <= thrustDecisionReach + 0.04) {
+          scores.thrustAttack = (scores.thrustAttack || 0) + 0.26 + passiveBoost * 0.24;
+        }
+        if (dist <= heavyDecisionReach && engagement.forwardDot >= 0.94) {
+          scores.heavyAttack = (scores.heavyAttack || 0) + 0.16 + passiveBoost * 0.16;
+        }
       }
     }
 
@@ -737,11 +803,15 @@ export class AIController {
   }
 
   _getOpponentMotionRead(frameCount) {
+    const passiveFrames = frameCount - this._opponentLastActiveFrame;
     return {
       recentApproach: frameCount - this._recentApproachFrame <= 18,
       recentLateralThreat: frameCount - this._recentLateralThreatFrame <= 22,
       sidestepPunishCount: this._sidestepPunishCount,
       recentlyPunishedBySidestep: frameCount - this._lastSidestepPunishFrame <= SIDESTEP_PUNISH_MEMORY_FRAMES,
+      passiveTarget: passiveFrames >= PASSIVE_TARGET_FRAMES,
+      strongPassiveTarget: passiveFrames >= PASSIVE_TARGET_STRONG_FRAMES,
+      passiveFrames,
     };
   }
 
@@ -1006,6 +1076,7 @@ export class AIController {
       sidestepPunishCount: this._sidestepPunishCount,
       recentApproachFrame: this._recentApproachFrame,
       recentLateralThreatFrame: this._recentLateralThreatFrame,
+      opponentLastActiveFrame: this._opponentLastActiveFrame,
       parryPunishReadyFrame: this._parryPunishReadyFrame,
       parryPunishDelayFrames: this._parryPunishDelayFrames,
     };
@@ -1032,6 +1103,9 @@ export class AIController {
     this._mobilityFatigue = 0;
     this._lastObservedDist = null;
     this._lastObservedSideDot = 0;
+    this._opponentLastPosition = null;
+    this._opponentLastMotionFrame = -9999;
+    this._opponentLastActiveFrame = -9999;
     this._recentApproachFrame = -9999;
     this._recentLateralThreatFrame = -9999;
     this._sidestepPunishCount = 0;

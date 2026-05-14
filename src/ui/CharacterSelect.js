@@ -1,6 +1,7 @@
 import { CHARACTER_DEFS, DEFAULT_CHAR } from '../entities/CharacterDefs.js';
 import { getDefaultMultiplayerWsUrl } from '../net/NetConfig.js';
 import { DEFAULT_STAGE, STAGE_IDS, getStageDef } from '../arena/StageDefs.js';
+import { DEFAULT_STAGE_FX, STAGE_FX_DEFS, getStageFxDef } from '../arena/StageFxDefs.js';
 
 const STORAGE_KEY = 'ringofsteel.select.v1';
 
@@ -14,13 +15,23 @@ export class CharacterSelect {
     this.p1Char = DEFAULT_CHAR;
     this.p2Char = DEFAULT_CHAR;
     this.stageId = DEFAULT_STAGE;
+    this.stageFxId = DEFAULT_STAGE_FX;
     this.onStageChange = null;
+    this.onStageFxChange = null;
 
     this.difficultySection = document.getElementById('difficulty-section');
     this.stageSection = document.getElementById('stage-section');
     this.stageContainer = document.getElementById('stage-options');
+    this.stagePreview = this.stageSection?.querySelector('.stage-preview') ?? null;
     this.stageTitle = document.getElementById('stage-preview-title');
     this.stageDescription = document.getElementById('stage-preview-description');
+    this.stageStats = document.getElementById('stage-preview-stats');
+    this.stageFxSection = document.getElementById('stage-fx-section');
+    this.stageFxContainer = document.getElementById('stage-fx-options');
+    this.stageFxPreview = this.stageFxSection?.querySelector('.stage-fx-preview') ?? null;
+    this.stageFxTitle = document.getElementById('stage-fx-preview-title');
+    this.stageFxDescription = document.getElementById('stage-fx-preview-description');
+    this.stageFxSource = document.getElementById('stage-fx-preview-source');
     this.onlineSection = document.getElementById('online-section');
     this.onlineServerUrl = document.getElementById('online-server-url');
     this.onlineLobbyCode = document.getElementById('online-lobby-code');
@@ -61,11 +72,13 @@ export class CharacterSelect {
     this._setupButtons();
     this._buildCharButtons();
     this._buildStageButtons();
+    this._buildStageFxButtons();
     this._syncModeButtons();
     this._syncDifficultyButtons();
     this._updateModeUI();
     this.clearOnlineLobbyInfo();
     this._updateStagePreview();
+    this._updateStageFxPreview();
   }
 
   _setupButtons() {
@@ -169,14 +182,34 @@ export class CharacterSelect {
       const btn = document.createElement('button');
       btn.className = 'select-btn stage-select-btn' + (id === this.stageId ? ' active' : '');
       btn.dataset.stage = id;
+      const metrics = stage.ui?.metrics ?? [];
+      const meta = metrics.slice(0, 2).map((item) => `<span>${item.value}</span>`).join('');
+      this._applyStageTheme(btn, stage);
       btn.innerHTML = `
         <span class="stage-select-name">${stage.name}</span>
         <span class="stage-select-tag">${stage.tagline}</span>
+        <span class="stage-select-meta">${meta}</span>
       `;
       btn.addEventListener('click', () => this.setStage(id));
       this.stageContainer.appendChild(btn);
     }
     this._updateStageButtons();
+  }
+
+  _buildStageFxButtons() {
+    if (!this.stageFxContainer) return;
+    this.stageFxContainer.innerHTML = '';
+    for (const effect of STAGE_FX_DEFS) {
+      const btn = document.createElement('button');
+      btn.className = 'select-btn stage-fx-btn' + (effect.id === this.stageFxId ? ' active' : '');
+      btn.dataset.stageFx = effect.id;
+      btn.innerHTML = `
+        <span class="stage-fx-name">${effect.name}</span>
+        <span class="stage-fx-tag">${effect.tagline}</span>
+      `;
+      btn.addEventListener('click', () => this.setStageFx(effect.id));
+      this.stageFxContainer.appendChild(btn);
+    }
   }
 
   _createCharButton(id, label, playerIndex) {
@@ -212,9 +245,25 @@ export class CharacterSelect {
       });
     }
     this._updateStagePreview();
+    this._updateStageFxPreview();
     this._savePreferences();
     if (!silent && this.onStageChange) {
       this.onStageChange(stage.id);
+    }
+  }
+
+  setStageFx(stageFxId, { silent = false } = {}) {
+    const effect = getStageFxDef(stageFxId);
+    this.stageFxId = effect.id;
+    if (this.stageFxContainer) {
+      this.stageFxContainer.querySelectorAll('[data-stage-fx]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.stageFx === effect.id);
+      });
+    }
+    this._updateStageFxPreview();
+    this._savePreferences();
+    if (!silent && this.onStageFxChange) {
+      this.onStageFxChange(effect.id);
     }
   }
 
@@ -234,6 +283,26 @@ export class CharacterSelect {
     const stage = getStageDef(this.stageId);
     if (this.stageTitle) this.stageTitle.textContent = stage.name;
     if (this.stageDescription) this.stageDescription.textContent = stage.description;
+    if (this.stageStats) {
+      const metrics = stage.ui?.metrics ?? [];
+      this.stageStats.innerHTML = metrics.map((metric) => `
+        <div class="stage-stat">
+          <span class="stage-stat-label">${metric.label}</span>
+          <span class="stage-stat-value">${metric.value}</span>
+        </div>
+      `).join('');
+    }
+    if (this.stagePreview) this._applyStageTheme(this.stagePreview, stage);
+    if (this.stageSection) this._applyStageTheme(this.stageSection, stage);
+  }
+
+  _updateStageFxPreview() {
+    const effect = getStageFxDef(this.stageFxId);
+    if (this.stageFxTitle) this.stageFxTitle.textContent = effect.name;
+    if (this.stageFxDescription) this.stageFxDescription.textContent = effect.description;
+    if (this.stageFxSource) this.stageFxSource.textContent = effect.sourceHint;
+    if (this.stageFxPreview) this._applyStageTheme(this.stageFxPreview, getStageDef(this.stageId));
+    if (this.stageFxSection) this._applyStageTheme(this.stageFxSection, getStageDef(this.stageId));
   }
 
   _updateStageButtons() {
@@ -485,6 +554,7 @@ export class CharacterSelect {
         this.p2Char = saved.p2Char;
       }
       this.stageId = getStageDef(saved.stageId).id;
+      this.stageFxId = getStageFxDef(saved.stageFxId).id;
       if (typeof saved.serverUrl === 'string' && this.onlineServerUrl) {
         this.onlineServerUrl.value = saved.serverUrl;
       }
@@ -501,6 +571,7 @@ export class CharacterSelect {
         p1Char: this.p1Char,
         p2Char: this.p2Char,
         stageId: this.stageId,
+        stageFxId: this.stageFxId,
         serverUrl: this.onlineServerUrl?.value?.trim() || '',
       }));
     } catch {
@@ -512,5 +583,16 @@ export class CharacterSelect {
     if (e.code === 'Escape' && this.controlsModal?.classList.contains('open')) {
       this._setControlsOpen(false);
     }
+  }
+
+  _applyStageTheme(el, stage) {
+    if (!el || !stage?.ui) return;
+    el.style.setProperty('--stage-accent', stage.ui.accent);
+    el.style.setProperty('--stage-accent-soft', stage.ui.accentSoft);
+    el.style.setProperty('--stage-panel-top', stage.ui.panelTop);
+    el.style.setProperty('--stage-panel-bottom', stage.ui.panelBottom);
+    el.style.setProperty('--stage-border', stage.ui.border);
+    el.style.setProperty('--stage-glow', stage.ui.glow);
+    el.style.setProperty('--stage-muted', stage.ui.muted);
   }
 }

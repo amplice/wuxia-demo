@@ -4,6 +4,7 @@ import { MatchSim } from '../sim/MatchSim.js';
 import { createEmptyInputFrame } from '../sim/InputFrame.js';
 import { FRAME_DURATION, FighterState, AttackType, HitResult } from '../core/Constants.js';
 import { getAttackData } from '../combat/AttackData.js';
+import { getArenaEdgeDistance } from '../arena/ArenaBounds.js';
 
 const PLANNER_HORIZON_FRAMES = 28;
 const ACTION_CANDIDATES = Object.freeze([
@@ -34,6 +35,14 @@ function normalizeWeights(entries) {
     return entries.map((entry) => ({ ...entry, weight: uniform }));
   }
   return entries.map((entry) => ({ ...entry, weight: entry.weight / total }));
+}
+
+function isSidestepAction(action) {
+  return action === 'sidestepUp' || action === 'sidestepDown';
+}
+
+function isHeavyOrThrustAction(action) {
+  return action === 'heavyAttack' || action === 'thrustAttack';
 }
 
 export class PlannerAIController extends AIController {
@@ -131,7 +140,7 @@ export class PlannerAIController extends AIController {
   _buildPlanningContext(fighter, opponent, dist, motionRead) {
     const closeRange = dist <= (fighter.charDef?.aiRanges?.close ?? 2.5);
     const engageRange = dist <= (fighter.charDef?.aiRanges?.engage ?? 3.0);
-    const edgeDistance = Math.hypot(fighter.position.x, fighter.position.z);
+    const edgeDistance = getArenaEdgeDistance(fighter.position.x, fighter.position.z);
     const opponentClassId = getFighterClassId(opponent);
     const blocking = opponent.state === FighterState.BLOCK || opponent.state === FighterState.BLOCK_STUN;
     const recentBlock = (this._opponentLastBlockFrame ?? -9999) > -9999 && ((this.lastDecisionFrame - this._opponentLastBlockFrame) <= 36);
@@ -147,6 +156,7 @@ export class PlannerAIController extends AIController {
       blocking ||
       vulnerable ||
       dist <= 2.15;
+    const passiveTarget = motionRead.passiveTarget && !blocking && !vulnerable && !opponent.fsm.isAttacking;
     return {
       dist,
       closeRange,
@@ -160,6 +170,7 @@ export class PlannerAIController extends AIController {
       recentClash,
       stableLane,
       defensiveNeed,
+      passiveTarget,
       motionRead,
     };
   }
@@ -203,10 +214,21 @@ export class PlannerAIController extends AIController {
 
   _buildCandidateActions(fighter, opponent, context) {
     const classId = getFighterClassId(fighter);
-    const { dist, closeRange, engageRange, edgeDistance, opponentClassId, blocking, vulnerable, recentClash, stableLane, defensiveNeed, motionRead } = context;
     const actions = new Set(ACTION_CANDIDATES);
 
-    if (edgeDistance > 6.6 && !defensiveNeed) {
+    this._applyGenericCandidateFilters(actions, fighter, opponent, context);
+    if (classId === 'knight') {
+      this._applyKnightCandidateFilters(actions, opponent, context);
+    }
+    this._applyPassiveTargetCandidateFilters(actions, context);
+
+    return [...actions];
+  }
+
+  _applyGenericCandidateFilters(actions, fighter, opponent, context) {
+    const { dist, edgeDistance, blocking, vulnerable, recentClash, defensiveNeed } = context;
+
+    if (edgeDistance < 1.4 && !defensiveNeed) {
       actions.delete('backstep');
     }
 
@@ -221,13 +243,16 @@ export class PlannerAIController extends AIController {
     if (dist > 2.85 && !vulnerable && !blocking && !recentClash) {
       actions.delete('heavyAttack');
     }
+  }
 
-    if (classId === 'knight' && dist > 2.45 && !defensiveNeed) {
+  _applyKnightCandidateFilters(actions, opponent, context) {
+    const { dist, opponentClassId, blocking, vulnerable, recentClash, stableLane, defensiveNeed, motionRead } = context;
+
+    if (dist > 2.45 && !defensiveNeed) {
       actions.delete('backstep');
     }
 
     if (
-      classId === 'knight' &&
       !(
         blocking ||
         vulnerable ||
@@ -247,7 +272,6 @@ export class PlannerAIController extends AIController {
     }
 
     if (
-      classId === 'knight' &&
       dist > 2.25 &&
       !blocking &&
       !vulnerable &&
@@ -258,7 +282,6 @@ export class PlannerAIController extends AIController {
     }
 
     if (
-      classId === 'knight' &&
       opponentClassId === 'spearman' &&
       dist > 1.7 &&
       !blocking &&
@@ -270,7 +293,6 @@ export class PlannerAIController extends AIController {
     }
 
     if (
-      classId === 'knight' &&
       opponentClassId === 'spearman' &&
       dist > 1.65 &&
       !blocking &&
@@ -283,7 +305,6 @@ export class PlannerAIController extends AIController {
     }
 
     if (
-      classId === 'knight' &&
       opponentClassId === 'spearman' &&
       dist > 1.55 &&
       motionRead.recentLateralThreat &&
@@ -294,14 +315,40 @@ export class PlannerAIController extends AIController {
       actions.delete('thrustAttack');
       actions.delete('heavyAttack');
     }
+  }
 
-    return [...actions];
+  _applyPassiveTargetCandidateFilters(actions, context) {
+    const { dist, stableLane, defensiveNeed, passiveTarget } = context;
+
+    if (passiveTarget && !defensiveNeed) {
+      actions.delete('block');
+      actions.delete('moveBack');
+      actions.delete('backstep');
+      if (stableLane && dist > 1.55) {
+        actions.delete('sidestepUp');
+        actions.delete('sidestepDown');
+      }
+    }
   }
 
   _buildLikelyResponses(fighter, opponent, dist, motionRead) {
     const classId = getFighterClassId(fighter);
     const opponentClassId = getFighterClassId(opponent);
     const recentBlock = (this._opponentLastBlockFrame ?? -9999) > -9999 && ((this.lastDecisionFrame - this._opponentLastBlockFrame) <= 36);
+    if (motionRead.passiveTarget && !opponent.fsm.isAttacking && opponent.state === FighterState.IDLE) {
+      const responses = [
+        { action: 'idle', weight: dist > 1.9 ? 0.62 : 0.54 },
+        { action: 'moveForward', weight: dist > 2.0 ? 0.22 : 0.08 },
+        { action: 'block', weight: dist <= 1.95 ? 0.08 : 0.03 },
+      ];
+      if (dist <= 1.85) {
+        responses.push({ action: 'quickAttack', weight: 0.06 });
+      }
+      if (dist <= 2.1) {
+        responses.push({ action: 'moveBack', weight: 0.04 });
+      }
+      return normalizeWeights(responses);
+    }
     const responses = [];
     const sidestepWeightBase = motionRead.recentlyPunishedBySidestep || motionRead.recentApproach ? 0.38 : 0.24;
     const sidestepWeight =
@@ -370,7 +417,7 @@ export class PlannerAIController extends AIController {
     const aiSim = aiIndex === 0 ? sim.fighter1 : sim.fighter2;
     const opponentSim = aiIndex === 0 ? sim.fighter2 : sim.fighter1;
     const initialEngagement = this._getEngagementContext(aiSim, opponentSim, aiSim.distanceTo(opponentSim));
-    const initialEdgeDistance = Math.hypot(aiSim.position.x, aiSim.position.z);
+    const initialEdgeDistance = getArenaEdgeDistance(aiSim.position.x, aiSim.position.z);
 
     let sidestepExposureFrames = 0;
     let offAngleAttackFrames = 0;
@@ -410,7 +457,7 @@ export class PlannerAIController extends AIController {
       ) {
         passiveFrames++;
       }
-      if (Math.hypot(aiSim.position.x, aiSim.position.z) > initialEdgeDistance + 0.12) {
+      if (getArenaEdgeDistance(aiSim.position.x, aiSim.position.z) < initialEdgeDistance - 0.12) {
         edgeRetreatFrames++;
       }
 
@@ -429,7 +476,7 @@ export class PlannerAIController extends AIController {
     }
 
     const finalEngagement = this._getEngagementContext(aiSim, opponentSim, aiSim.distanceTo(opponentSim));
-    const finalEdgeDistance = Math.hypot(aiSim.position.x, aiSim.position.z);
+    const finalEdgeDistance = getArenaEdgeDistance(aiSim.position.x, aiSim.position.z);
     const initialSideAbs = Math.abs(initialEngagement.sideDot);
     const finalSideAbs = Math.abs(finalEngagement.sideDot);
     const angleGain = finalSideAbs - initialSideAbs;
@@ -459,170 +506,238 @@ export class PlannerAIController extends AIController {
     if (responseAction.startsWith('sidestep') && aiSim.state !== FighterState.ATTACK_ACTIVE) score += 3;
     if ((aiAction === 'heavyAttack' || aiAction === 'thrustAttack') && responseAction.startsWith('sidestep')) score -= 14;
     if ((aiAction === 'heavyAttack' || aiAction === 'thrustAttack') && responseAction === 'moveForward' && aiSim.distanceTo(opponentSim) > 2.0) score -= 6;
-    if ((aiAction === 'block' || aiAction === 'idle') && finalEdgeDistance > initialEdgeDistance + 0.2) score -= 8;
-    if (aiAction === 'moveForward' && finalEdgeDistance < initialEdgeDistance - 0.08) score += 4;
+    if ((aiAction === 'block' || aiAction === 'idle') && finalEdgeDistance < initialEdgeDistance - 0.2) score -= 8;
+    if (aiAction === 'moveForward' && finalEdgeDistance > initialEdgeDistance + 0.08) score += 4;
+    if (responseAction === 'idle') {
+      if (aiAction === 'moveForward' && aiSim.distanceTo(opponentSim) < initialEngagement.dist - 0.18 && finalEngagement.forwardDot > 0.94) {
+        score += 6.2;
+      }
+      if (aiAction === 'quickAttack' && finalEngagement.forwardDot > 0.93 && aiSim.distanceTo(opponentSim) <= 1.85) score += 8.6;
+      if (aiAction === 'thrustAttack' && finalEngagement.forwardDot > 0.94 && aiSim.distanceTo(opponentSim) <= 2.1) score += 8.2;
+      if (aiAction === 'heavyAttack' && finalEngagement.forwardDot > 0.95 && aiSim.distanceTo(opponentSim) <= 2.0) score += 5.8;
+      if (aiAction === 'block' || aiAction === 'idle') score -= 5.0;
+      if (aiAction === 'moveBack' || aiAction === 'backstep') score -= 6.0;
+      if (aiAction === 'sidestepUp' || aiAction === 'sidestepDown') score -= 3.8;
+    }
     if ((aiAction === 'sidestepUp' || aiAction === 'sidestepDown')) {
       score += clamp(angleGain * 14, -2, 5);
       if (finalSideAbs >= 0.18 && finalSideAbs <= 0.58 && finalEngagement.forwardDot >= 0.76) score += 4;
       if (responseAction === 'moveForward' || responseAction === 'quickAttack') score += 2.5;
-      if (finalEdgeDistance > initialEdgeDistance + 0.16) score -= 5;
+      if (finalEdgeDistance < initialEdgeDistance - 0.16) score -= 5;
       if (opponentSim.state === FighterState.SIDESTEP && finalEngagement.forwardDot < 0.72) score -= 3;
     }
+
+    score = this._applyClassSpecificScore(score, {
+      classId,
+      opponentClassId,
+      opponentBlockRatio,
+      aiAction,
+      responseAction,
+      aiSim,
+      opponentSim,
+      initialEngagement,
+      finalEngagement,
+      angleGain,
+      finalSideAbs,
+    });
+
+    return score;
+  }
+
+  _applyClassSpecificScore(score, context) {
+    const {
+      classId,
+      opponentClassId,
+      opponentBlockRatio,
+      aiAction,
+      responseAction,
+      aiSim,
+      opponentSim,
+      initialEngagement,
+      finalEngagement,
+      angleGain,
+      finalSideAbs,
+    } = context;
 
     if (classId === 'spearman') {
       if (aiAction === 'block' && !opponentSim.fsm.isAttacking) score -= 1.3;
       if (aiAction === 'moveForward' && finalEngagement.forwardDot > 0.94 && aiSim.distanceTo(opponentSim) < initialEngagement.dist - 0.12) score += 2.4;
-      if ((aiAction === 'sidestepUp' || aiAction === 'sidestepDown') && finalSideAbs >= 0.16 && finalSideAbs <= 0.52) score += 2.8;
+      if (isSidestepAction(aiAction) && finalSideAbs >= 0.16 && finalSideAbs <= 0.52) score += 2.8;
     } else if (classId === 'ronin') {
-      const knightCatchBand =
-        opponentClassId === 'knight' &&
-        initialEngagement.dist >= 1.58 &&
-        initialEngagement.dist <= 2.1;
-      if ((aiAction === 'sidestepUp' || aiAction === 'sidestepDown')) {
-        score += clamp(angleGain * 18, -2, 7);
-        if (finalSideAbs >= 0.2 && finalSideAbs <= 0.68 && finalEngagement.forwardDot >= 0.72) score += 5;
-        if (responseAction === 'moveForward' || responseAction === 'quickAttack' || responseAction === 'block') score += 2.5;
-      }
-      if (aiAction === 'moveForward' && finalEngagement.forwardDot > 0.9 && aiSim.distanceTo(opponentSim) < initialEngagement.dist - 0.16) score += 3.2;
-      if (aiAction === 'quickAttack' && finalSideAbs >= 0.14 && aiSim.distanceTo(opponentSim) <= 1.9) score += 4.5;
-      if (aiAction === 'thrustAttack' && finalEngagement.forwardDot > 0.9 && aiSim.distanceTo(opponentSim) <= 2.05) score += 2.8;
-      if (aiAction === 'heavyAttack' && finalSideAbs >= 0.1 && finalSideAbs <= 0.6) score += 3;
-      if (aiAction === 'block') score -= 1.9;
-      if (aiAction === 'idle') score -= 1.1;
-      if (aiAction === 'moveBack') score += responseAction === 'quickAttack' || responseAction === 'moveForward' ? 1.5 : 0;
-      if (aiAction === 'backstep') score += responseAction === 'quickAttack' ? 3 : 0;
-      if (opponentClassId === 'knight') {
-        if ((aiAction === 'sidestepUp' || aiAction === 'sidestepDown') && responseAction === 'heavyAttack' && knightCatchBand) {
-          score -= 8.6;
-        }
-        if ((aiAction === 'sidestepUp' || aiAction === 'sidestepDown') && responseAction === 'thrustAttack' && initialEngagement.dist <= 2.15) {
-          score -= 4.0;
-        }
-        if (aiAction === 'moveForward' && responseAction === 'heavyAttack' && knightCatchBand) {
-          score -= 4.4;
-        }
-        if (aiAction === 'thrustAttack' && responseAction === 'heavyAttack' && knightCatchBand) {
-          score -= 5.0;
-        }
-        if (aiAction === 'block' && (responseAction === 'heavyAttack' || responseAction === 'thrustAttack')) {
-          score += 4.0;
-        }
-        if (aiAction === 'moveBack' && responseAction === 'heavyAttack') {
-          score += 3.4;
-        }
-        if (aiAction === 'backstep' && responseAction === 'heavyAttack') {
-          score += 4.4;
-        }
-      }
+      score = this._applyRoninSpecificScore(score, context);
     } else if (classId === 'knight') {
-      const openNeutralHeavy =
-        aiAction === 'heavyAttack' &&
-        !opponentSim.fsm.isAttacking &&
-        opponentSim.state !== FighterState.BLOCK &&
-        opponentSim.state !== FighterState.BLOCK_STUN &&
-        opponentSim.state !== FighterState.HIT_STUN &&
-        opponentSim.state !== FighterState.PARRIED_STUN &&
-        opponentSim.state !== FighterState.CLASH &&
-        initialEngagement.dist > 1.9;
-      const openNeutralThrust =
-        aiAction === 'thrustAttack' &&
-        !opponentSim.fsm.isAttacking &&
-        opponentSim.state !== FighterState.BLOCK &&
-        opponentSim.state !== FighterState.BLOCK_STUN &&
-        opponentSim.state !== FighterState.HIT_STUN &&
-        opponentSim.state !== FighterState.PARRIED_STUN &&
-        opponentSim.state !== FighterState.CLASH &&
-        initialEngagement.dist > 2.15;
-      const closeGuardPressure =
-        opponentClassId === 'spearman' &&
-        opponentBlockRatio >= 0.48 &&
-        initialEngagement.dist <= 2.25;
-      const recentPressureChain =
-        this._plannerRecentActions.slice(-2).filter((action) => action === 'moveForward' || action === 'quickAttack' || action === 'thrustAttack').length;
-      if (opponentClassId === 'spearman') {
-        if (aiAction === 'block' && !opponentSim.fsm.isAttacking) score -= 1.8;
-        if (aiAction === 'moveForward' && finalEngagement.forwardDot > 0.94 && aiSim.distanceTo(opponentSim) < initialEngagement.dist - 0.14) score += 2.2;
-        if (aiAction === 'quickAttack' && finalEngagement.forwardDot > 0.92 && aiSim.distanceTo(opponentSim) <= 1.85) score += 2.6;
-        if (aiAction === 'thrustAttack' && finalEngagement.forwardDot > 0.95 && aiSim.distanceTo(opponentSim) <= 2.1) score += 2.8;
-        if ((aiAction === 'sidestepUp' || aiAction === 'sidestepDown')) {
-          score += clamp(angleGain * 14, -1, 5);
-          if (finalSideAbs >= 0.16 && finalSideAbs <= 0.46 && finalEngagement.forwardDot >= 0.78) score += 3.2;
-        }
-        if (responseAction === 'quickAttack') {
-          if (aiAction === 'block') score += 3.2;
-          if (aiAction === 'sidestepUp' || aiAction === 'sidestepDown') score += 2.6;
-        }
-        if (responseAction === 'moveForward') {
-          if (aiAction === 'block') score += 1.4;
-          if (aiAction === 'sidestepUp' || aiAction === 'sidestepDown') score += 1.2;
-        }
-        if (responseAction === 'sidestepUp' || responseAction === 'sidestepDown') {
-          if (aiAction === 'quickAttack') score -= 4.6;
-          if (aiAction === 'thrustAttack') score -= 3.2;
-          if (aiAction === 'heavyAttack') score -= 5.4;
-          if (aiAction === 'block') score += 1.4;
-          if (aiAction === 'sidestepUp' || aiAction === 'sidestepDown') score += 2.2;
-        }
-        if (responseAction === 'block') {
-          if (aiAction === 'quickAttack' && finalEngagement.forwardDot > 0.92 && aiSim.distanceTo(opponentSim) <= 1.9) score += 5.2;
-          if (aiAction === 'moveForward' && finalEngagement.forwardDot > 0.94 && aiSim.distanceTo(opponentSim) < initialEngagement.dist - 0.1) score += 3.4;
-          if (aiAction === 'heavyAttack' && finalEngagement.forwardDot > 0.94 && aiSim.distanceTo(opponentSim) <= 2.0) score += 4.2;
-          if (aiAction === 'thrustAttack' && finalEngagement.forwardDot > 0.95 && aiSim.distanceTo(opponentSim) <= 2.05) score += 3.6;
-          if (closeGuardPressure) {
-            if (aiAction === 'moveForward') score += 4.6;
-            if (aiAction === 'quickAttack') score += 5.8;
-            if (aiAction === 'thrustAttack') score += 4.4;
-            if (aiAction === 'heavyAttack' && initialEngagement.dist <= 1.95) score += 2.6;
-          }
-        }
-      } else if (opponentClassId === 'ronin') {
-        const heavyCatchBand = initialEngagement.dist >= 1.6 && initialEngagement.dist <= 2.05;
-        if (aiAction === 'block' && (responseAction === 'quickAttack' || responseAction === 'thrustAttack' || responseAction === 'moveForward')) {
-          score += 4.2;
-        }
-        if (aiAction === 'quickAttack' && finalEngagement.forwardDot > 0.92 && aiSim.distanceTo(opponentSim) <= 1.85) {
-          score += 3.8;
-        }
-        if (aiAction === 'thrustAttack' && finalEngagement.forwardDot > 0.94 && aiSim.distanceTo(opponentSim) <= 2.0) {
-          score += 2.4;
-        }
-        if (aiAction === 'heavyAttack' && responseAction === 'moveForward' && heavyCatchBand) {
-          score += 6.2;
-        }
-        if (aiAction === 'heavyAttack' && (responseAction === 'sidestepUp' || responseAction === 'sidestepDown') && heavyCatchBand) {
-          score += 8.0;
-        }
-        if (aiAction === 'heavyAttack' && (responseAction === 'quickAttack' || responseAction === 'thrustAttack') && heavyCatchBand) {
-          score += 4.2;
-        }
-        if (aiAction === 'thrustAttack' && (responseAction === 'sidestepUp' || responseAction === 'sidestepDown')) {
-          score -= 2.8;
-        }
-        if (aiAction === 'moveForward' && (responseAction === 'sidestepUp' || responseAction === 'sidestepDown')) {
-          score -= 1.2;
-        }
-      }
-      if (aiAction === 'block' && !opponentSim.fsm.isAttacking) score -= 1.4;
-      if (aiAction === 'block' && (responseAction === 'quickAttack' || responseAction === 'moveForward')) score += 1.8;
-      if (aiAction === 'moveForward' && aiSim.distanceTo(opponentSim) < initialEngagement.dist - 0.2 && finalEngagement.forwardDot > 0.94) score += 4.2;
-      if (aiAction === 'quickAttack' && finalEngagement.forwardDot > 0.92 && aiSim.distanceTo(opponentSim) <= 1.85) score += 2.4;
-      if (aiAction === 'heavyAttack' && responseAction === 'block') score += 4;
-      if (aiAction === 'heavyAttack' && finalEngagement.forwardDot > 0.95 && aiSim.distanceTo(opponentSim) >= 1.65 && aiSim.distanceTo(opponentSim) <= 2.05) score += 2.8;
-      if (openNeutralHeavy) score -= 9.5;
-      if (openNeutralThrust) score -= 8.5;
-      if (aiAction === 'heavyAttack' && (responseAction === 'sidestepUp' || responseAction === 'sidestepDown')) score -= 4.5;
-      if (aiAction === 'thrustAttack' && (responseAction === 'sidestepUp' || responseAction === 'sidestepDown')) score -= 3.2;
-      if (aiAction === 'thrustAttack' && finalEngagement.forwardDot > 0.94 && aiSim.distanceTo(opponentSim) <= 2.1) score += 4.2;
-      if (aiAction === 'idle') score -= 0.8;
-      if (aiAction === 'sidestepUp' || aiAction === 'sidestepDown') score -= 1.1;
+      score = this._applyKnightSpecificScore(score, context);
+    }
+
+    return score;
+  }
+
+  _applyRoninSpecificScore(score, context) {
+    const {
+      opponentClassId,
+      aiAction,
+      responseAction,
+      aiSim,
+      opponentSim,
+      initialEngagement,
+      finalEngagement,
+      angleGain,
+      finalSideAbs,
+    } = context;
+
+    const knightCatchBand =
+      opponentClassId === 'knight' &&
+      initialEngagement.dist >= 1.58 &&
+      initialEngagement.dist <= 2.1;
+    if (isSidestepAction(aiAction)) {
+      score += clamp(angleGain * 18, -2, 7);
+      if (finalSideAbs >= 0.2 && finalSideAbs <= 0.68 && finalEngagement.forwardDot >= 0.72) score += 5;
+      if (responseAction === 'moveForward' || responseAction === 'quickAttack' || responseAction === 'block') score += 2.5;
+    }
+    if (aiAction === 'moveForward' && finalEngagement.forwardDot > 0.9 && aiSim.distanceTo(opponentSim) < initialEngagement.dist - 0.16) score += 3.2;
+    if (aiAction === 'quickAttack' && finalSideAbs >= 0.14 && aiSim.distanceTo(opponentSim) <= 1.9) score += 4.5;
+    if (aiAction === 'thrustAttack' && finalEngagement.forwardDot > 0.9 && aiSim.distanceTo(opponentSim) <= 2.05) score += 2.8;
+    if (aiAction === 'heavyAttack' && finalSideAbs >= 0.1 && finalSideAbs <= 0.6) score += 3;
+    if (aiAction === 'block') score -= 1.9;
+    if (aiAction === 'idle') score -= 1.1;
+    if (aiAction === 'moveBack') score += responseAction === 'quickAttack' || responseAction === 'moveForward' ? 1.5 : 0;
+    if (aiAction === 'backstep') score += responseAction === 'quickAttack' ? 3 : 0;
+    if (opponentClassId === 'knight') {
+      if (isSidestepAction(aiAction) && responseAction === 'heavyAttack' && knightCatchBand) score -= 8.6;
+      if (isSidestepAction(aiAction) && responseAction === 'thrustAttack' && initialEngagement.dist <= 2.15) score -= 4.0;
+      if (aiAction === 'moveForward' && responseAction === 'heavyAttack' && knightCatchBand) score -= 4.4;
+      if (aiAction === 'thrustAttack' && responseAction === 'heavyAttack' && knightCatchBand) score -= 5.0;
+      if (aiAction === 'block' && isHeavyOrThrustAction(responseAction)) score += 4.0;
+      if (aiAction === 'moveBack' && responseAction === 'heavyAttack') score += 3.4;
+      if (aiAction === 'backstep' && responseAction === 'heavyAttack') score += 4.4;
+    }
+
+    return score;
+  }
+
+  _applyKnightSpecificScore(score, context) {
+    const {
+      opponentClassId,
+      opponentBlockRatio,
+      aiAction,
+      responseAction,
+      aiSim,
+      opponentSim,
+      initialEngagement,
+      finalEngagement,
+      angleGain,
+      finalSideAbs,
+    } = context;
+
+    const openNeutralHeavy =
+      aiAction === 'heavyAttack' &&
+      !opponentSim.fsm.isAttacking &&
+      opponentSim.state !== FighterState.BLOCK &&
+      opponentSim.state !== FighterState.BLOCK_STUN &&
+      opponentSim.state !== FighterState.HIT_STUN &&
+      opponentSim.state !== FighterState.PARRIED_STUN &&
+      opponentSim.state !== FighterState.CLASH &&
+      initialEngagement.dist > 1.9;
+    const openNeutralThrust =
+      aiAction === 'thrustAttack' &&
+      !opponentSim.fsm.isAttacking &&
+      opponentSim.state !== FighterState.BLOCK &&
+      opponentSim.state !== FighterState.BLOCK_STUN &&
+      opponentSim.state !== FighterState.HIT_STUN &&
+      opponentSim.state !== FighterState.PARRIED_STUN &&
+      opponentSim.state !== FighterState.CLASH &&
+      initialEngagement.dist > 2.15;
+    const closeGuardPressure =
+      opponentClassId === 'spearman' &&
+      opponentBlockRatio >= 0.48 &&
+      initialEngagement.dist <= 2.25;
+    const recentPressureChain =
+      this._plannerRecentActions.slice(-2).filter((action) => action === 'moveForward' || action === 'quickAttack' || action === 'thrustAttack').length;
+
+    if (opponentClassId === 'spearman') {
+      score = this._applyKnightVsSpearmanScore(score, context, closeGuardPressure);
+    } else if (opponentClassId === 'ronin') {
+      score = this._applyKnightVsRoninScore(score, context);
+    }
+
+    if (aiAction === 'block' && !opponentSim.fsm.isAttacking) score -= 1.4;
+    if (aiAction === 'block' && (responseAction === 'quickAttack' || responseAction === 'moveForward')) score += 1.8;
+    if (aiAction === 'moveForward' && aiSim.distanceTo(opponentSim) < initialEngagement.dist - 0.2 && finalEngagement.forwardDot > 0.94) score += 4.2;
+    if (aiAction === 'quickAttack' && finalEngagement.forwardDot > 0.92 && aiSim.distanceTo(opponentSim) <= 1.85) score += 2.4;
+    if (aiAction === 'heavyAttack' && responseAction === 'block') score += 4;
+    if (aiAction === 'heavyAttack' && finalEngagement.forwardDot > 0.95 && aiSim.distanceTo(opponentSim) >= 1.65 && aiSim.distanceTo(opponentSim) <= 2.05) score += 2.8;
+    if (openNeutralHeavy) score -= 9.5;
+    if (openNeutralThrust) score -= 8.5;
+    if (aiAction === 'heavyAttack' && isSidestepAction(responseAction)) score -= 4.5;
+    if (aiAction === 'thrustAttack' && isSidestepAction(responseAction)) score -= 3.2;
+    if (aiAction === 'thrustAttack' && finalEngagement.forwardDot > 0.94 && aiSim.distanceTo(opponentSim) <= 2.1) score += 4.2;
+    if (aiAction === 'idle') score -= 0.8;
+    if (isSidestepAction(aiAction)) score -= 1.1;
+    if (closeGuardPressure) {
+      if (aiAction === 'moveForward') score += 2.4 + recentPressureChain * 0.8;
+      if (aiAction === 'quickAttack') score += 2.8 + recentPressureChain * 1.0;
+      if (aiAction === 'thrustAttack') score += 1.8 + recentPressureChain * 0.7;
+      if (aiAction === 'moveBack') score -= 2.4;
+      if (aiAction === 'idle') score -= 2.8;
+    }
+
+    return score;
+  }
+
+  _applyKnightVsSpearmanScore(score, context, closeGuardPressure) {
+    const { aiAction, responseAction, aiSim, opponentSim, initialEngagement, finalEngagement, angleGain, finalSideAbs } = context;
+
+    if (aiAction === 'block' && !opponentSim.fsm.isAttacking) score -= 1.8;
+    if (aiAction === 'moveForward' && finalEngagement.forwardDot > 0.94 && aiSim.distanceTo(opponentSim) < initialEngagement.dist - 0.14) score += 2.2;
+    if (aiAction === 'quickAttack' && finalEngagement.forwardDot > 0.92 && aiSim.distanceTo(opponentSim) <= 1.85) score += 2.6;
+    if (aiAction === 'thrustAttack' && finalEngagement.forwardDot > 0.95 && aiSim.distanceTo(opponentSim) <= 2.1) score += 2.8;
+    if (isSidestepAction(aiAction)) {
+      score += clamp(angleGain * 14, -1, 5);
+      if (finalSideAbs >= 0.16 && finalSideAbs <= 0.46 && finalEngagement.forwardDot >= 0.78) score += 3.2;
+    }
+    if (responseAction === 'quickAttack') {
+      if (aiAction === 'block') score += 3.2;
+      if (isSidestepAction(aiAction)) score += 2.6;
+    }
+    if (responseAction === 'moveForward') {
+      if (aiAction === 'block') score += 1.4;
+      if (isSidestepAction(aiAction)) score += 1.2;
+    }
+    if (isSidestepAction(responseAction)) {
+      if (aiAction === 'quickAttack') score -= 4.6;
+      if (aiAction === 'thrustAttack') score -= 3.2;
+      if (aiAction === 'heavyAttack') score -= 5.4;
+      if (aiAction === 'block') score += 1.4;
+      if (isSidestepAction(aiAction)) score += 2.2;
+    }
+    if (responseAction === 'block') {
+      if (aiAction === 'quickAttack' && finalEngagement.forwardDot > 0.92 && aiSim.distanceTo(opponentSim) <= 1.9) score += 5.2;
+      if (aiAction === 'moveForward' && finalEngagement.forwardDot > 0.94 && aiSim.distanceTo(opponentSim) < initialEngagement.dist - 0.1) score += 3.4;
+      if (aiAction === 'heavyAttack' && finalEngagement.forwardDot > 0.94 && aiSim.distanceTo(opponentSim) <= 2.0) score += 4.2;
+      if (aiAction === 'thrustAttack' && finalEngagement.forwardDot > 0.95 && aiSim.distanceTo(opponentSim) <= 2.05) score += 3.6;
       if (closeGuardPressure) {
-        if (aiAction === 'moveForward') score += 2.4 + recentPressureChain * 0.8;
-        if (aiAction === 'quickAttack') score += 2.8 + recentPressureChain * 1.0;
-        if (aiAction === 'thrustAttack') score += 1.8 + recentPressureChain * 0.7;
-        if (aiAction === 'moveBack') score -= 2.4;
-        if (aiAction === 'idle') score -= 2.8;
+        if (aiAction === 'moveForward') score += 4.6;
+        if (aiAction === 'quickAttack') score += 5.8;
+        if (aiAction === 'thrustAttack') score += 4.4;
+        if (aiAction === 'heavyAttack' && initialEngagement.dist <= 1.95) score += 2.6;
       }
     }
+
+    return score;
+  }
+
+  _applyKnightVsRoninScore(score, context) {
+    const { aiAction, responseAction, aiSim, opponentSim, initialEngagement, finalEngagement } = context;
+    const heavyCatchBand = initialEngagement.dist >= 1.6 && initialEngagement.dist <= 2.05;
+
+    if (aiAction === 'block' && (responseAction === 'quickAttack' || responseAction === 'thrustAttack' || responseAction === 'moveForward')) score += 4.2;
+    if (aiAction === 'quickAttack' && finalEngagement.forwardDot > 0.92 && aiSim.distanceTo(opponentSim) <= 1.85) score += 3.8;
+    if (aiAction === 'thrustAttack' && finalEngagement.forwardDot > 0.94 && aiSim.distanceTo(opponentSim) <= 2.0) score += 2.4;
+    if (aiAction === 'heavyAttack' && responseAction === 'moveForward' && heavyCatchBand) score += 6.2;
+    if (aiAction === 'heavyAttack' && isSidestepAction(responseAction) && heavyCatchBand) score += 8.0;
+    if (aiAction === 'heavyAttack' && (responseAction === 'quickAttack' || responseAction === 'thrustAttack') && heavyCatchBand) score += 4.2;
+    if (aiAction === 'thrustAttack' && isSidestepAction(responseAction)) score -= 2.8;
+    if (aiAction === 'moveForward' && isSidestepAction(responseAction)) score -= 1.2;
 
     return score;
   }

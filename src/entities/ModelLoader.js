@@ -456,21 +456,20 @@ export class ModelLoader {
 
     const joints = {};
     clone.traverse((child) => {
+      const n = ModelLoader._normalizeBoneName(child.name);
+      if (!joints.weaponTip && ModelLoader._isWeaponTipName(n)) {
+        joints.weaponTip = child;
+      }
+      if (!joints.weaponBase && ModelLoader._isWeaponBaseName(n)) {
+        joints.weaponBase = child;
+      }
+
       if (child.isBone) {
-        const n = ModelLoader._normalizeBoneName(child.name);
         if (!joints.handR && ModelLoader.RIGHT_HAND_BONE_NAMES.includes(n)) {
           joints.handR = child;
         }
         if (!joints.handL && ModelLoader.LEFT_HAND_BONE_NAMES.includes(n)) {
           joints.handL = child;
-        }
-        if (!joints.weaponTip && ModelLoader.WEAPON_TIP_BONE_NAMES.includes(n)) {
-          joints.weaponTip = child;
-        } else if (!joints.weaponTip && n.endsWith('tip')) {
-          joints.weaponTip = child;
-        }
-        if (!joints.weaponBase && ModelLoader.WEAPON_BASE_BONE_NAMES.includes(n)) {
-          joints.weaponBase = child;
         }
         if (!joints.spearTip && n === 'speartip') {
           joints.spearTip = child;
@@ -566,5 +565,13 @@ export class ModelLoader {
 
   static _normalizeBoneName(name) {
     return name.toLowerCase().replace(/\s+/g, '').replace(/[\-:.]/g, '_');
+  }
+
+  static _isWeaponTipName(name) {
+    return ModelLoader.WEAPON_TIP_BONE_NAMES.includes(name) || name.endsWith('tip');
+  }
+
+  static _isWeaponBaseName(name) {
+    return ModelLoader.WEAPON_BASE_BONE_NAMES.includes(name);
   }
 }

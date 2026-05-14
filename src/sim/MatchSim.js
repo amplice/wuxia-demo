@@ -7,7 +7,6 @@ import {
   AttackType,
   HitResult,
   FIGHT_START_DISTANCE,
-  ARENA_RADIUS,
   KNOCKBACK_SLIDE_SPEED,
   BLOCK_KNOCKBACK_SLIDE_SPEED,
   HEAVY_ADVANTAGE_STUN_MULT,
@@ -19,15 +18,17 @@ import {
   HIT_STUN_FRAMES,
   PARRIED_STUN_FRAMES,
 } from '../core/Constants.js';
+import { clampPointToArena, getCurrentArenaStage, isPointInsideArena } from '../arena/ArenaBounds.js';
 
 const _pairBodyA = new THREE.Vector3();
 const _pairBodyB = new THREE.Vector3();
 
 export class MatchSim {
-  constructor({ fighter1, fighter2, hitResolver = new HitResolver() }) {
+  constructor({ fighter1, fighter2, hitResolver = new HitResolver(), stageId = null }) {
     this.fighter1 = fighter1;
     this.fighter2 = fighter2;
     this.hitResolver = hitResolver;
+    this.stageId = stageId ?? getCurrentArenaStage();
 
     this.frameCount = 0;
     this.roundOver = false;
@@ -389,8 +390,7 @@ export class MatchSim {
 
   _checkRingOut() {
     const checkFighter = (fighter, otherFighter) => {
-      const dist = Math.sqrt(fighter.position.x * fighter.position.x + fighter.position.z * fighter.position.z);
-      if (dist > ARENA_RADIUS + 0.5 && fighter.state !== FighterState.DYING && fighter.state !== FighterState.DEAD) {
+      if (!isPointInsideArena(fighter.position.x, fighter.position.z, this.stageId, 0.5) && fighter.state !== FighterState.DYING && fighter.state !== FighterState.DEAD) {
         fighter.damageSystem.applyDamage();
         fighter.fsm.startDying();
         this.roundOver = true;
@@ -417,13 +417,7 @@ export class MatchSim {
       s === FighterState.PARRIED_STUN;
 
     if (noClamp(fighter.state)) return;
-
-    const dist = Math.sqrt(fighter.position.x * fighter.position.x + fighter.position.z * fighter.position.z);
-    if (dist > ARENA_RADIUS - 0.3) {
-      const scale = (ARENA_RADIUS - 0.3) / dist;
-      fighter.position.x *= scale;
-      fighter.position.z *= scale;
-    }
+    clampPointToArena(fighter.position, this.stageId, 0.3);
   }
 
   _enforceFighterSeparation(a, b) {

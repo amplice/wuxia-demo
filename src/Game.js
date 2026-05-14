@@ -10,6 +10,7 @@ import { ModelLoader } from './entities/ModelLoader.js';
 import { CHARACTER_DEFS, DEFAULT_CHAR } from './entities/CharacterDefs.js';
 import { ParticleSystem } from './vfx/ParticleSystem.js';
 import { ScreenEffects } from './vfx/ScreenEffects.js';
+import { CharacterStyleController } from './vfx/CharacterStyleController.js';
 import { AIController } from './ai/AIController.js';
 import { PlannerAIController } from './ai/PlannerAIController.js';
 import { HumanAIMatchRecorder } from './ai/HumanAIMatchRecorder.js';
@@ -22,6 +23,9 @@ import { SoundManager } from './audio/SoundManager.js';
 import { listAudioAssets } from './audio/AudioCatalog.js';
 import { GameAudio } from './audio/GameAudio.js';
 import { DEFAULT_STAGE, getStageDef } from './arena/StageDefs.js';
+import { DEFAULT_STAGE_FX } from './arena/StageFxDefs.js';
+import { setCurrentArenaStage } from './arena/ArenaBounds.js';
+import { PostProcessController } from './vfx/PostProcessController.js';
 import {
   GameState, HitResult,
   FIGHT_START_DISTANCE, ROUNDS_TO_WIN, ROUND_INTRO_DURATION,
@@ -54,8 +58,10 @@ export class Game {
     this.input = new InputManager();
     this.ui = new UIManager();
     this.screenEffects = new ScreenEffects();
+    this.characterStyle = new CharacterStyleController();
     this.sound = new SoundManager();
     this.gameAudio = new GameAudio(this.sound);
+    this.postProcessor = null;
 
     this.scene = null;
     this.camera = null;
@@ -85,6 +91,7 @@ export class Game {
     this.mode = 'ai';
     this.difficulty = 'medium';
     this.stageId = DEFAULT_STAGE;
+    this.stageFxId = DEFAULT_STAGE_FX;
     this.p1Score = 0;
     this.p2Score = 0;
     this.currentRound = 1;
@@ -95,6 +102,8 @@ export class Game {
   }
 
   async init() {
+    this.stageId = this.ui.select.stageId ?? this.stageId;
+    this.stageFxId = this.ui.select.stageFxId ?? this.stageFxId;
     this.ui.showLoading(0.05, 'Booting renderer...');
     await this.renderer.init();
     this.ui.showLoading(0.15, 'Preparing arena...');
@@ -107,6 +116,9 @@ export class Game {
     this.environment = new Environment(this.scene, this.stageId);
     this.particles = new ParticleSystem(this.scene);
     this.debugOverlay = new DebugOverlay(this.scene);
+    this.postProcessor = new PostProcessController(this.renderer.renderer);
+    this.renderer.setPostProcessor(this.postProcessor);
+    this.postProcessor.setStyle(this.stageFxId);
 
     // Preload all characters with explicit progress so startup doesn't look dead.
     const charEntries = Object.entries(CHARACTER_DEFS);
@@ -160,6 +172,9 @@ export class Game {
     };
     this.ui.select.onStageChange = (stageId) => {
       this._applyStage(stageId, { syncSelect: false });
+    };
+    this.ui.select.onStageFxChange = (stageFxId) => {
+      this._applyStageFx(stageFxId, { syncSelect: false });
     };
     this.ui.select.onModeChange = async (mode) => {
       if (mode === 'online') {
@@ -244,6 +259,7 @@ export class Game {
     this.matchSim = new MatchSim({
       fighter1: this.fighter1,
       fighter2: this.fighter2,
+      stageId: this.stageId,
     });
 
     this.ui.showHUD();
@@ -281,7 +297,7 @@ export class Game {
     this.stateTimer = 0;
     this._resetCombatPresentation();
 
-    this.matchSim?.startRound(FIGHT_START_DISTANCE);
+    this.matchSim?.startRound(getStageDef(this.stageId).startDistance ?? FIGHT_START_DISTANCE);
     this.aiController?.reset();
     this.gameAudio.resetFighterState([this.fighter1, this.fighter2]);
 
@@ -334,13 +350,25 @@ export class Game {
   _applyStage(stageId, { syncSelect = true } = {}) {
     const stage = getStageDef(stageId);
     this.stageId = stage.id;
+    setCurrentArenaStage(stage.id);
     this.arena?.applyStage(stage.id);
     this.environment?.applyStage(stage.id);
+    this.characterStyle.setStyle(this.stageFxId, [this.fighter1, this.fighter2], [this.arena?.group, this.environment?.group]);
     if (syncSelect) {
       this.ui?.select?.setStage(stage.id, { silent: true });
     }
     this.ui?.hud?.setStage(stage);
     return stage;
+  }
+
+  _applyStageFx(stageFxId, { syncSelect = true } = {}) {
+    this.stageFxId = stageFxId ?? DEFAULT_STAGE_FX;
+    this.postProcessor?.setStyle(this.stageFxId);
+    this.characterStyle.setStyle(this.stageFxId, [this.fighter1, this.fighter2], [this.arena?.group, this.environment?.group]);
+    if (syncSelect) {
+      this.ui?.select?.setStageFx(this.stageFxId, { silent: true });
+    }
+    return this.stageFxId;
   }
 
   _spawnFighters(p1Char, p2Char) {
@@ -355,6 +383,7 @@ export class Game {
     this._attachWeapon(this.fighter1);
     this._attachWeapon(this.fighter2);
     this.gameAudio.resetFighterState([this.fighter1, this.fighter2]);
+    this.characterStyle.setStyle(this.stageFxId, [this.fighter1, this.fighter2], [this.arena?.group, this.environment?.group]);
 
     return { p1, p2 };
   }
@@ -807,7 +836,7 @@ export class Game {
 
     this._renderUpdate(rawDelta);
     this._updateDebugOverlay();
-    this.renderer.render(this.scene, this.camera);
+    this.renderer.render(this.scene, this.camera, rawDelta);
   }
 
   _fixedUpdate(dt) {
@@ -910,6 +939,7 @@ export class Game {
     }
 
     this.environment.update(dt);
+    this.characterStyle.update(dt);
     this.particles.update(dt);
   }
 

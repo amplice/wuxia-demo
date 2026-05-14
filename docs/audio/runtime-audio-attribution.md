@@ -51,22 +51,8 @@ This documents the audio files currently wired into the game runtime under `publ
 | `public/audio/movement/footstep-03.ogg` | `04_cc0_fantozzi_stone_l1.ogg` | CC0 | https://opengameart.org/content/fantozzis-footsteps-grasssand-stone |
 | `public/audio/movement/footstep-04.ogg` | `06_cc0_fantozzi_stone_r2.ogg` | CC0 | https://opengameart.org/content/fantozzis-footsteps-grasssand-stone |
 
-## UI And System
-
-| Runtime Asset | Source Asset | License | Source |
-|---|---|---|---|
-| `public/audio/ui/menu-confirm-01.ogg` | `01_ccby_confirm_token_a.ogg` | CC BY 4.0 | https://potion-of-midi.itch.io/synth-booster-ui-audio-pack |
-| `public/audio/ui/menu-confirm-02.ogg` | `04_cc0_confirmation_003.ogg` | CC0 | https://kenney.nl/assets/ui-audio |
-| `public/audio/ui/menu-back-01.ogg` | `01_ccby_cancel_crunch_a.ogg` | CC BY 4.0 | https://potion-of-midi.itch.io/synth-booster-ui-audio-pack |
-| `public/audio/ui/menu-back-02.ogg` | `04_cc0_back_002.ogg` | CC0 | https://www.kenney.nl/assets/interface-sounds |
-| `public/audio/ui/round-start-01.ogg` | `02_ccby_confirm_boomsparkle_a.ogg` | CC BY 4.0 | https://potion-of-midi.itch.io/synth-booster-ui-audio-pack |
-| `public/audio/ui/round-start-02.ogg` | `04_cc0_open_004.ogg` | CC0 | https://kenney.nl/assets/ui-audio |
-| `public/audio/ui/round-win-01.ogg` | `03_ccby_confirm_boomsparkle_c.ogg` | CC BY 4.0 | https://potion-of-midi.itch.io/synth-booster-ui-audio-pack |
-| `public/audio/ui/round-win-02.wav` | `04_cc0_win_sound.wav` | CC0 | https://opengameart.org/content/win-sound-effect |
-| `public/audio/system/ring-out-01.ogg` | `04_ccby_confirm_ring_d.ogg` | CC BY 4.0 | https://potion-of-midi.itch.io/synth-booster-ui-audio-pack |
-| `public/audio/system/ring-out-02.ogg` | `05_cc0_impactBell_heavy_004.ogg` | CC0 | https://kenney.nl/assets/impact-sounds |
-
 ## Notes
 
 - `attack-start-attribution.md` remains accurate for the attack-start subset; this file is the broader runtime manifest.
-- The non-attack-start sounds are placeholders. The point of the current wiring is to make final swaps cheap: replace files in `public/audio/` or adjust `src/audio/AudioCatalog.js`.
+- This file tracks only sounds currently referenced by `src/audio/AudioCatalog.js`.
+- UI and system sounds are intentionally not wired into runtime audio right now.

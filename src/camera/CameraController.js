@@ -104,15 +104,15 @@ export class CameraController {
       return;
     }
 
-    this.menuOrbitTime += dt * 0.22;
-    const radius = 9.4;
-    const height = 3.4 + Math.sin(this.menuOrbitTime * 1.3) * 0.18;
+    this.menuOrbitTime += dt * 0.18;
+    const radius = 10.6 + Math.sin(this.menuOrbitTime * 0.7) * 0.35;
+    const height = 3.05 + Math.sin(this.menuOrbitTime * 1.2) * 0.16;
     const targetPosition = new THREE.Vector3(
       Math.cos(this.menuOrbitTime) * radius,
       height,
-      Math.sin(this.menuOrbitTime) * radius
+      Math.sin(this.menuOrbitTime) * (radius * 0.84)
     );
-    const targetLookAt = new THREE.Vector3(0, 0.9, 0);
+    const targetLookAt = new THREE.Vector3(0, 0.72, 0);
 
     if (this._needsSnap) {
       this.camera.position.copy(targetPosition);

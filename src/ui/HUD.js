@@ -45,6 +45,14 @@ export class HUD {
     this.stageBadge.style.display = 'block';
     this.stageName.textContent = stage.name;
     this.stageTagline.textContent = stage.tagline;
+    if (stage.ui) {
+      this.stageBadge.style.setProperty('--stage-accent', stage.ui.accent);
+      this.stageBadge.style.setProperty('--stage-border', stage.ui.border);
+      this.stageBadge.style.setProperty('--stage-panel-top', stage.ui.panelTop);
+      this.stageBadge.style.setProperty('--stage-panel-bottom', stage.ui.panelBottom);
+      this.stageBadge.style.setProperty('--stage-glow', stage.ui.glow);
+      this.stageBadge.style.setProperty('--stage-muted', stage.ui.muted);
+    }
   }
 
   updateRoundPips(p1Wins, p2Wins) {

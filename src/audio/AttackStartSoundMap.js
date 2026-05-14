@@ -4,6 +4,11 @@ export const ATTACK_START_SOUND_MAP = Object.freeze({
     heavy: '/audio/attack-start/knight-heavy.wav',
     thrust: '/audio/attack-start/knight-thrust.wav',
   }),
+  huscarl: Object.freeze({
+    quick: '/audio/attack-start/knight-quick.wav',
+    heavy: '/audio/attack-start/knight-heavy.wav',
+    thrust: '/audio/attack-start/knight-thrust.wav',
+  }),
   ronin: Object.freeze({
     quick: '/audio/attack-start/ronin-quick.wav',
     heavy: '/audio/attack-start/ronin-heavy.wav',
