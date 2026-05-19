@@ -52,11 +52,6 @@ export const template = defineCharacter('template', {
     },
   },
   sim: {
-    attackFrames: {
-      [AttackType.QUICK]: 40,
-      [AttackType.HEAVY]: 50,
-      [AttackType.THRUST]: 45,
-    },
     poseProfile: {
       idle: {
         [AttackType.QUICK]: { yawStart: 0, yawEnd: 0, reachStart: 0.9, reachEnd: 0.9, liftStart: 0.1, liftEnd: 0.1 },

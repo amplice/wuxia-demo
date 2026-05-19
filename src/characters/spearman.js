@@ -55,11 +55,6 @@ export const spearman = defineCharacter('spearman', {
     },
   },
   sim: {
-    attackFrames: {
-      [AttackType.QUICK]: 43,
-      [AttackType.HEAVY]: 55,
-      [AttackType.THRUST]: 45,
-    },
     poseProfile: {
       idle: {
         [AttackType.QUICK]: { yawStart: 0, yawEnd: 0, reachStart: 0.85, reachEnd: 0.85, liftStart: 0.12, liftEnd: 0.12 },
@@ -120,6 +115,6 @@ export const spearman = defineCharacter('spearman', {
   attackStrength: 1.0,
   defenseStoutness: 0.9,
   sidestepDistance: 1.2,
-  stepDistance: 0.95,
-  bodySeparation: 1.9,
+  stepDistance: 0.965,
+  bodySeparation: 1.6,
 });

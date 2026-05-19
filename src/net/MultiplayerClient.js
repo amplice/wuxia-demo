@@ -60,12 +60,12 @@ export class MultiplayerClient extends EventTarget {
     this.connected = false;
   }
 
-  createLobby(stageId = null) {
-    this._send({ type: ClientMessageType.CREATE_LOBBY, stageId });
+  createLobby() {
+    this._send({ type: ClientMessageType.CREATE_LOBBY });
   }
 
-  createPublicLobby(stageId = null) {
-    this._send({ type: ClientMessageType.CREATE_LOBBY, visibility: 'public', stageId });
+  createPublicLobby() {
+    this._send({ type: ClientMessageType.CREATE_LOBBY, visibility: 'public' });
   }
 
   joinLobby(code) {
@@ -76,8 +76,8 @@ export class MultiplayerClient extends EventTarget {
     this._send({ type: ClientMessageType.LIST_LOBBIES });
   }
 
-  quickMatch(stageId = null) {
-    this._send({ type: ClientMessageType.QUICK_MATCH, stageId });
+  quickMatch() {
+    this._send({ type: ClientMessageType.QUICK_MATCH });
   }
 
   setCharacter(characterId) {

@@ -239,6 +239,28 @@ export const AI_PROFILE_LIBRARY = {
     moveBackBias: -0.02,
     idleBias: -0.08,
   },
+  huscarl_raider: {
+    ...COMMON_DEFAULTS,
+    reactionFrames: 7,
+    decisionNoise: 0.07,
+    aggression: 0.86,
+    parryRate: 0.16,
+    dodgeRate: 0.14,
+    counterRate: 0.5,
+    punishRate: 0.7,
+    heavyMixup: 0.22,
+    spacingAwareness: 0.16,
+    quickBias: 0.32,
+    heavyBias: 0.04,
+    thrustBias: 0.18,
+    blockBias: -0.04,
+    parryBias: 0.02,
+    sidestepBias: -0.04,
+    backstepBias: -0.14,
+    moveForwardBias: 0.32,
+    moveBackBias: -0.22,
+    idleBias: -0.2,
+  },
   spearman_evasive: {
     ...COMMON_DEFAULTS,
     reactionFrames: 8,
@@ -523,6 +545,7 @@ export const AI_CLASS_PROFILE_SETS = Object.freeze({
   spearman: ['spearman_evasive', 'spearman_heavy_bully', 'spearman_aggressor', 'spearman_hard_line'],
   ronin: ['ronin_evasive', 'ronin_lancer', 'ronin_duelist', 'ronin_hard_duelist'],
   knight: ['knight_duelist', 'knight_bulwark', 'knight_sentinel', 'knight_hard_guard'],
+  huscarl: ['huscarl_raider', 'scrapper', 'skirmisher', 'aggressor'],
 });
 
 export const AI_DIFFICULTY_ALIASES = Object.freeze({

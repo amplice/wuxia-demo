@@ -63,12 +63,12 @@ function stepController(controller, fighter, opponent, sim, dt) {
   controller.update(fighter, opponent, sim.frameCount, dt);
 }
 
-function runSingleRound(leftChar, rightChar, leftController, rightController) {
+function runSingleRound(leftChar, rightChar, leftController, rightController, roundNumber = 1) {
   const fighter1 = createFighter(0, leftChar);
   const fighter2 = createFighter(1, rightChar);
   const sim = new MatchSim({ fighter1, fighter2 });
 
-  sim.startRound();
+  sim.startRound(undefined, { swapSides: roundNumber % 2 === 0 });
   resetController(leftController);
   resetController(rightController);
 
@@ -94,8 +94,8 @@ function runMatch(leftChar, rightChar, leftControllerFactory, rightControllerFac
   let roundsPlayed = 0;
 
   while (leftRounds < ROUNDS_TO_WIN && rightRounds < ROUNDS_TO_WIN && roundsPlayed < MAX_MATCH_ROUNDS) {
-    const roundResult = runSingleRound(leftChar, rightChar, leftController, rightController);
     roundsPlayed++;
+    const roundResult = runSingleRound(leftChar, rightChar, leftController, rightController, roundsPlayed);
     if (roundResult.timedOut) break;
     if (roundResult.winner === 1) leftRounds++;
     else if (roundResult.winner === 2) rightRounds++;

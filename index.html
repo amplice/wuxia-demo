@@ -317,316 +317,11 @@
       gap: 12px;
       margin-bottom: 0;
     }
-    .stage-options {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(240px, 1fr));
-      gap: 14px;
-      width: min(920px, 94vw);
-    }
-    #stage-section {
-      --stage-accent: #e2b36f;
-      --stage-accent-soft: #5a3418;
-      --stage-panel-top: rgba(24, 18, 22, 0.92);
-      --stage-panel-bottom: rgba(10, 11, 16, 0.96);
-      --stage-border: rgba(226, 179, 111, 0.32);
-      --stage-glow: rgba(226, 179, 111, 0.16);
-      --stage-muted: #d9c79f;
-    }
-    .stage-select-btn {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 6px;
-      min-height: 104px;
-      padding: 16px 16px 14px;
-      text-align: left;
-      background:
-        linear-gradient(180deg, var(--stage-panel-top), var(--stage-panel-bottom)),
-        var(--ui-scanlines);
-      border-color: var(--stage-border);
-      overflow: hidden;
-    }
-    .stage-select-btn::before {
-      content: '';
-      position: absolute;
-      inset: 0 0 auto 0;
-      height: 3px;
-      background: linear-gradient(90deg, transparent, var(--stage-accent), transparent);
-      opacity: 0.9;
-    }
-    .stage-select-btn::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(circle at 100% 0%, var(--stage-glow), transparent 55%);
-      pointer-events: none;
-    }
-    .stage-select-btn:hover,
-    .stage-select-btn.active {
-      background:
-        linear-gradient(180deg, var(--stage-panel-top), var(--stage-panel-bottom)),
-        var(--ui-scanlines);
-      border-color: var(--stage-border);
-      box-shadow:
-        0 0 20px var(--stage-glow),
-        inset 0 0 0 1px rgba(255,255,255,0.04);
-    }
-    .stage-select-name {
-      position: relative;
-      z-index: 1;
-      font-size: 15px;
-      letter-spacing: 3px;
-      color: #f4dfb8;
-    }
-    .stage-select-tag {
-      position: relative;
-      z-index: 1;
-      font-size: 11px;
-      letter-spacing: 1px;
-      color: #98abc8;
-      text-transform: none;
-      line-height: 1.35;
-    }
-    .stage-select-meta {
-      position: relative;
-      z-index: 1;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: auto;
-      padding-top: 4px;
-    }
-    .stage-select-meta span {
-      padding: 4px 7px;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(7, 10, 15, 0.28);
-      color: var(--stage-muted);
-      font-size: 10px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-    }
-    .stage-preview {
-      margin-top: 14px;
-      padding: 16px 18px 18px;
-      background:
-        linear-gradient(180deg, var(--stage-panel-top), var(--stage-panel-bottom)),
-        var(--ui-scanlines);
-      border: 1px solid var(--stage-border);
-      text-align: left;
-      box-shadow:
-        0 16px 36px rgba(0, 0, 0, 0.28),
-        inset 0 0 0 1px rgba(255,255,255,0.03);
-      position: relative;
-      overflow: hidden;
-    }
-    .stage-preview::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(circle at 100% 0%, var(--stage-glow), transparent 52%);
-      pointer-events: none;
-    }
-    .stage-preview .label {
-      position: relative;
-      z-index: 1;
-      display: block;
-      color: var(--ui-gold-dim);
-      font-size: 11px;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-    }
-    .stage-preview .stage-title {
-      position: relative;
-      z-index: 1;
-      font-size: 18px;
-      color: #f3dfb8;
-      letter-spacing: 4px;
-      margin-bottom: 8px;
-      text-transform: uppercase;
-    }
-    .stage-preview .stage-description {
-      position: relative;
-      z-index: 1;
-      color: #a7b3c9;
-      font-size: 13px;
-      line-height: 1.5;
-      max-width: 720px;
-    }
-    .stage-preview-stats {
-      position: relative;
-      z-index: 1;
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 14px;
-    }
-    .stage-stat {
-      padding: 9px 10px 10px;
-      background: rgba(5, 8, 12, 0.26);
-      border: 1px solid rgba(255,255,255,0.06);
-    }
-    .stage-stat-label {
-      display: block;
-      color: var(--ui-gold-dim);
-      font-size: 10px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      margin-bottom: 5px;
-    }
-    .stage-stat-value {
-      display: block;
-      color: var(--stage-muted);
-      font-size: 13px;
-      letter-spacing: 1px;
-    }
-    #stage-fx-section {
-      --stage-accent: #e2b36f;
-      --stage-accent-soft: #5a3418;
-      --stage-panel-top: rgba(24, 18, 22, 0.92);
-      --stage-panel-bottom: rgba(10, 11, 16, 0.96);
-      --stage-border: rgba(226, 179, 111, 0.32);
-      --stage-glow: rgba(226, 179, 111, 0.16);
-      --stage-muted: #d9c79f;
-    }
-    .stage-fx-options {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 12px;
-      width: min(920px, 94vw);
-    }
-    .stage-fx-btn {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 5px;
-      min-height: 88px;
-      padding: 14px 14px 12px;
-      text-align: left;
-      background:
-        linear-gradient(180deg, var(--stage-panel-top), var(--stage-panel-bottom)),
-        var(--ui-scanlines);
-      border-color: var(--stage-border);
-      position: relative;
-      overflow: hidden;
-    }
-    .stage-fx-btn::before {
-      content: '';
-      position: absolute;
-      inset: 0 auto 0 0;
-      width: 3px;
-      background: linear-gradient(180deg, transparent, var(--stage-accent), transparent);
-      opacity: 0.9;
-    }
-    .stage-fx-btn::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(circle at 100% 0%, var(--stage-glow), transparent 60%);
-      pointer-events: none;
-    }
-    .stage-fx-btn:hover,
-    .stage-fx-btn.active {
-      background:
-        linear-gradient(180deg, var(--stage-panel-top), var(--stage-panel-bottom)),
-        var(--ui-scanlines);
-      border-color: var(--stage-border);
-      box-shadow:
-        0 0 18px var(--stage-glow),
-        inset 0 0 0 1px rgba(255,255,255,0.04);
-    }
-    .stage-fx-name {
-      position: relative;
-      z-index: 1;
-      color: #f2dfbb;
-      font-size: 13px;
-      letter-spacing: 2px;
-    }
-    .stage-fx-tag {
-      position: relative;
-      z-index: 1;
-      color: var(--stage-muted);
-      font-size: 11px;
-      letter-spacing: 1px;
-      line-height: 1.35;
-      text-transform: none;
-    }
-    .stage-fx-preview {
-      margin-top: 14px;
-      padding: 16px 18px;
-      background:
-        linear-gradient(180deg, var(--stage-panel-top), var(--stage-panel-bottom)),
-        var(--ui-scanlines);
-      border: 1px solid var(--stage-border);
-      text-align: left;
-      position: relative;
-      overflow: hidden;
-      box-shadow:
-        0 16px 36px rgba(0, 0, 0, 0.24),
-        inset 0 0 0 1px rgba(255,255,255,0.03);
-    }
-    .stage-fx-preview::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(circle at 100% 0%, var(--stage-glow), transparent 55%);
-      pointer-events: none;
-    }
-    .stage-fx-preview .label {
-      position: relative;
-      z-index: 1;
-      display: block;
-      color: var(--ui-gold-dim);
-      font-size: 11px;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-    }
-    .stage-fx-preview .stage-fx-title {
-      position: relative;
-      z-index: 1;
-      font-size: 18px;
-      color: #f3dfb8;
-      letter-spacing: 4px;
-      margin-bottom: 8px;
-      text-transform: uppercase;
-    }
-    .stage-fx-preview .stage-fx-description {
-      position: relative;
-      z-index: 1;
-      color: #a7b3c9;
-      font-size: 13px;
-      line-height: 1.5;
-      max-width: 720px;
-    }
-    .stage-fx-preview .stage-fx-source {
-      position: relative;
-      z-index: 1;
-      display: inline-flex;
-      margin-top: 12px;
-      padding: 5px 8px;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(5, 8, 12, 0.28);
-      color: var(--stage-muted);
-      font-size: 10px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-    }
 
     @media (max-width: 720px) {
       .char-select-grid {
         grid-template-columns: 1fr;
         gap: 20px;
-      }
-      .stage-options {
-        grid-template-columns: 1fr;
-      }
-      .stage-fx-options {
-        grid-template-columns: 1fr;
-      }
-      .stage-preview-stats {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
 
@@ -955,61 +650,6 @@
     }
     .online-hud-strip .value {
       color: #ffffff;
-    }
-    .stage-hud-badge {
-      position: absolute;
-      top: 62px;
-      left: 50%;
-      transform: translateX(-50%);
-      min-width: 260px;
-      padding: 10px 16px;
-      text-align: center;
-      background:
-        linear-gradient(180deg, var(--stage-panel-top, rgba(15, 18, 26, 0.9)), var(--stage-panel-bottom, rgba(8, 10, 14, 0.95))),
-        var(--ui-scanlines);
-      border: 1px solid var(--stage-border, rgba(255, 225, 171, 0.18));
-      box-shadow:
-        var(--ui-shadow),
-        0 0 22px var(--stage-glow, rgba(255, 225, 171, 0.08));
-      pointer-events: none;
-      overflow: hidden;
-    }
-    .stage-hud-badge::before {
-      content: '';
-      position: absolute;
-      inset: 0 0 auto 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--stage-accent, #f2d6a0), transparent);
-      opacity: 0.92;
-    }
-    .stage-hud-badge .label {
-      display: block;
-      position: relative;
-      z-index: 1;
-      color: var(--ui-gold-dim);
-      font-size: 10px;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      margin-bottom: 6px;
-    }
-    .stage-hud-badge .value {
-      display: block;
-      position: relative;
-      z-index: 1;
-      color: #f0ddb6;
-      font-size: 15px;
-      letter-spacing: 4px;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-    .stage-hud-badge .tagline {
-      display: block;
-      position: relative;
-      z-index: 1;
-      color: var(--stage-muted, #9aa9c6);
-      font-size: 11px;
-      letter-spacing: 1px;
-      text-transform: none;
     }
     .fighter-hud {
       position: absolute;
@@ -1370,6 +1010,7 @@
         <h3>Mode</h3>
         <div class="select-options" id="mode-options">
           <button class="select-btn active" data-mode="ai">VS COMPUTER</button>
+          <button class="select-btn" data-mode="watch">AI VS AI</button>
           <button class="select-btn" data-mode="pvp">VS PLAYER</button>
           <button class="select-btn" data-mode="online">VS ONLINE</button>
         </div>
@@ -1381,28 +1022,6 @@
           <button class="select-btn" data-diff="easy">EASY</button>
           <button class="select-btn active" data-diff="medium">MEDIUM</button>
           <button class="select-btn" data-diff="hard">HARD</button>
-        </div>
-      </div>
-
-      <div class="select-section" id="stage-section">
-        <h3>Stage</h3>
-        <div class="stage-options" id="stage-options"></div>
-        <div class="stage-preview">
-          <span class="label">Current Arena</span>
-          <div class="stage-title" id="stage-preview-title">EMBER KEEP</div>
-          <div class="stage-description" id="stage-preview-description">A straight-up castle furnace court: round floor, hot braziers, heavy walls, nowhere to hide from the edge.</div>
-          <div class="stage-preview-stats" id="stage-preview-stats"></div>
-        </div>
-      </div>
-
-      <div class="select-section" id="stage-fx-section">
-        <h3>Visual Style</h3>
-        <div class="stage-fx-options" id="stage-fx-options"></div>
-        <div class="stage-fx-preview">
-          <span class="label">Current Look</span>
-          <div class="stage-fx-title" id="stage-fx-preview-title">CLASSIC</div>
-          <div class="stage-fx-description" id="stage-fx-preview-description">No extra post look. Use the raw stage lighting, materials, and authored arena art only.</div>
-          <div class="stage-fx-source" id="stage-fx-preview-source">Baseline</div>
         </div>
       </div>
 
@@ -1449,7 +1068,7 @@
       <div class="select-section">
         <div class="char-select-grid">
           <div class="char-select-column">
-            <h3>Player 1 Character</h3>
+            <h3 id="p1-char-heading">Player 1 Character</h3>
             <div class="select-options" id="p1-char-options"></div>
           </div>
           <div class="char-select-column">
@@ -1494,7 +1113,7 @@
               </div>
             </div>
           </div>
-          <div class="help-note">In VS COMPUTER, Player 2 controls are unused. Toggle debug with F3.</div>
+          <div class="help-note">In VS COMPUTER, Player 2 controls are unused. In AI VS AI, both fighters are controlled by CPU. Toggle debug with F3.</div>
         </div>
       </div>
     </div>
@@ -1508,11 +1127,6 @@
         <span class="value" id="online-hud-code">------</span>
         <span class="label">Ping</span>
         <span class="value" id="online-hud-ping">--</span>
-      </div>
-      <div class="stage-hud-badge" id="stage-hud-badge">
-        <span class="label">Arena</span>
-        <span class="value" id="stage-hud-name">EMBER KEEP</span>
-        <span class="tagline" id="stage-hud-tagline">Bronze court under furnace light</span>
       </div>
       <div class="fighter-hud p1">
         <div class="fighter-name">PLAYER 1</div>

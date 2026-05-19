@@ -22,6 +22,8 @@ import { clampPointToArena, getCurrentArenaStage, isPointInsideArena } from '../
 
 const _pairBodyA = new THREE.Vector3();
 const _pairBodyB = new THREE.Vector3();
+const ATTACK_BODY_SEPARATION_MULT = 0.5;
+const ATTACK_BODY_SEPARATION_RESTORE_FRAMES = 8;
 
 export class MatchSim {
   constructor({ fighter1, fighter2, hitResolver = new HitResolver(), stageId = null }) {
@@ -35,17 +37,19 @@ export class MatchSim {
     this.winner = null;
     this.killReason = null;
     this.events = [];
+    this._attackSeparationRestoreFrames = 0;
   }
 
-  startRound(startDistance = FIGHT_START_DISTANCE) {
+  startRound(startDistance = FIGHT_START_DISTANCE, options = {}) {
+    const swapSides = Boolean(options.swapSides);
     this.frameCount = 0;
     this.roundOver = false;
     this.winner = null;
     this.killReason = null;
     this.events.length = 0;
 
-    this.fighter1.resetForRound(-startDistance / 2);
-    this.fighter2.resetForRound(startDistance / 2);
+    this.fighter1.resetForRound((swapSides ? 1 : -1) * startDistance / 2);
+    this.fighter2.resetForRound((swapSides ? -1 : 1) * startDistance / 2);
   }
 
   step(dt = FRAME_DURATION, options = {}) {
@@ -421,7 +425,19 @@ export class MatchSim {
   }
 
   _enforceFighterSeparation(a, b) {
-    const minDist = getBodyRadius(a.charDef) + getBodyRadius(b.charDef);
+    let separationMult = 1;
+    if (a.fsm.isAttacking || b.fsm.isAttacking) {
+      separationMult = ATTACK_BODY_SEPARATION_MULT;
+      this._attackSeparationRestoreFrames = ATTACK_BODY_SEPARATION_RESTORE_FRAMES;
+    } else if (this._attackSeparationRestoreFrames > 0) {
+      const t = (
+        ATTACK_BODY_SEPARATION_RESTORE_FRAMES - this._attackSeparationRestoreFrames + 1
+      ) / ATTACK_BODY_SEPARATION_RESTORE_FRAMES;
+      separationMult = ATTACK_BODY_SEPARATION_MULT + (1 - ATTACK_BODY_SEPARATION_MULT) * t;
+      this._attackSeparationRestoreFrames--;
+    }
+
+    const minDist = (getBodyRadius(a.charDef) + getBodyRadius(b.charDef)) * separationMult;
     const { dx, dz, dist } = this._getFighterPairDelta(a, b);
     if (dist < minDist) {
       const overlap = (minDist - dist) / 2;

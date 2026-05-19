@@ -41,12 +41,12 @@ function resetController(controller) {
   resetControllerInstance(controller);
 }
 
-function runSingleRound(leftChar, rightChar, leftController, rightController) {
+function runSingleRound(leftChar, rightChar, leftController, rightController, roundNumber = 1) {
   const fighter1 = createFighter(0, leftChar);
   const fighter2 = createFighter(1, rightChar);
   const sim = new MatchSim({ fighter1, fighter2 });
 
-  sim.startRound();
+  sim.startRound(undefined, { swapSides: roundNumber % 2 === 0 });
   resetController(leftController);
   resetController(rightController);
 
@@ -71,8 +71,8 @@ function runMatch(leftChar, rightChar, leftProfile, rightProfile) {
   let roundsPlayed = 0;
 
   while (leftRounds < ROUNDS_TO_WIN && rightRounds < ROUNDS_TO_WIN && roundsPlayed < MAX_MATCH_ROUNDS) {
-    const winner = runSingleRound(leftChar, rightChar, leftController, rightController);
     roundsPlayed++;
+    const winner = runSingleRound(leftChar, rightChar, leftController, rightController, roundsPlayed);
     if (winner === 1) leftRounds++;
     else if (winner === 2) rightRounds++;
     else break;

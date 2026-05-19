@@ -32,7 +32,7 @@ function createFighter(charId, playerIndex) {
 }
 
 function setAttackState(fighter, attackType) {
-  fighter.fsm.transition(FighterState.ATTACK_ACTIVE, fighter.charDef.sim.attackFrames[attackType]);
+  fighter.fsm.transition(FighterState.ATTACK_ACTIVE, fighter._getAttackFrameCount(attackType));
   fighter.fsm.currentAttackType = attackType;
   fighter.fsm.currentAttackData = fighter.charDef.attackData[attackType];
   fighter.fsm.stateFrames = 1;
@@ -159,9 +159,9 @@ function testAuthoritativeTrackSync() {
       const clip = authoritative.clips?.[clipName];
       assert.ok(clip?.frameCount, `missing authoritative clip ${clipName} for ${charId}`);
       assert.equal(
-        charDef.sim.attackFrames[attackType],
+        new FighterSim(0, charId, charDef)._getAttackFrameCount(attackType),
         clip.frameCount,
-        `${charId} ${attackType} sim frames should stay synced to authoritative tracks`,
+        `${charId} ${attackType} sim attack duration should come from authoritative tracks`,
       );
     }
   }
@@ -171,7 +171,7 @@ function testContactWindows() {
   for (const [charId, charDef] of Object.entries(CHARACTER_DEFS)) {
     for (const attackType of Object.values(AttackType)) {
       const attack = charDef.attackData[attackType];
-      const frames = charDef.sim.attackFrames[attackType];
+      const frames = new FighterSim(0, charId, charDef)._getAttackFrameCount(attackType);
       const startFrame = attack.contactStart * frames;
       const endFrame = attack.contactEnd * frames;
       assert.ok(startFrame >= 0, `${charId} ${attackType} contact start must be non-negative`);

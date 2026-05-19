@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { CHARACTER_DEFS } from '../src/entities/CharacterDefs.js';
+import { FighterSim } from '../src/sim/FighterSim.js';
 import {
   AttackType,
   BLOCK_KNOCKBACK_SLIDE_SPEED,
@@ -40,8 +41,9 @@ function buildBaseline() {
       attacks: Object.fromEntries(
         Object.values(AttackType).map((attackType) => {
           const clip = authoritative?.clips?.[ATTACK_CLIPS[attackType]];
+          const fighter = new FighterSim(0, charId, charDef);
           return [attackType, {
-            frames: charDef.sim.attackFrames[attackType],
+            frames: fighter._getAttackFrameCount(attackType),
             authoritativeFrames: clip?.frameCount ?? null,
             aiRange: charDef.attackData[attackType].aiRange,
             lunge: charDef.attackData[attackType].lunge,

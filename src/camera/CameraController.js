@@ -29,7 +29,6 @@ export class CameraController {
     this.killCamKiller = null;
     this.killCamTime = 0;
     this.killCamPhase = 'freeze'; // 'freeze' | 'zoom' | 'orbit'
-    this.menuOrbitTime = 0;
 
     window.addEventListener('resize', () => this.onResize());
   }
@@ -66,6 +65,13 @@ export class CameraController {
       dx = fighter1.playerIndex < fighter2.playerIndex ? 1 : -1;
       dz = 0;
     }
+    // The normal fight camera should not rotate 180 degrees just because
+    // fighters swapped physical sides between rounds. Treat the fighter line
+    // as an undirected axis so side alternation is visible to the player.
+    if (dx < 0 || (Math.abs(dx) < 1e-6 && dz < 0)) {
+      dx = -dx;
+      dz = -dz;
+    }
     const fighterLineAngle = Math.atan2(dz, dx);
     const targetOrbit = fighterLineAngle + Math.PI / 2;
 
@@ -93,34 +99,6 @@ export class CameraController {
       this.camera.position.x += (Math.random() - 0.5) * this.shakeIntensity;
       this.camera.position.y += (Math.random() - 0.5) * this.shakeIntensity;
       this.shakeIntensity *= this.shakeDecay;
-    }
-
-    this.camera.lookAt(this.currentLookAt);
-  }
-
-  updateMenu(dt) {
-    if (this.killCamActive) {
-      this._updateKillCam(dt);
-      return;
-    }
-
-    this.menuOrbitTime += dt * 0.18;
-    const radius = 10.6 + Math.sin(this.menuOrbitTime * 0.7) * 0.35;
-    const height = 3.05 + Math.sin(this.menuOrbitTime * 1.2) * 0.16;
-    const targetPosition = new THREE.Vector3(
-      Math.cos(this.menuOrbitTime) * radius,
-      height,
-      Math.sin(this.menuOrbitTime) * (radius * 0.84)
-    );
-    const targetLookAt = new THREE.Vector3(0, 0.72, 0);
-
-    if (this._needsSnap) {
-      this.camera.position.copy(targetPosition);
-      this.currentLookAt.copy(targetLookAt);
-      this._needsSnap = false;
-    } else {
-      this.camera.position.lerp(targetPosition, 0.03);
-      this.currentLookAt.lerp(targetLookAt, 0.08);
     }
 
     this.camera.lookAt(this.currentLookAt);
@@ -241,7 +219,6 @@ export class CameraController {
     this.killCamKiller = null;
     this._killLastTime = null;
     this.orbitAngle = 0;
-    this.menuOrbitTime = 0;
     this._needsSnap = true;
   }
 }

@@ -22,7 +22,7 @@ export const knight = defineCharacter('knight', {
   attackData: {
     [AttackType.QUICK]: {
       aiRange: 1.55,
-      lunge: 0.45,
+      lunge: 0.43,
       blockPush: 0.6,
       lungeStart: 0.28,
       lungeEnd: 0.68,
@@ -56,11 +56,6 @@ export const knight = defineCharacter('knight', {
     },
   },
   sim: {
-    attackFrames: {
-      [AttackType.QUICK]: 48,
-      [AttackType.HEAVY]: 55,
-      [AttackType.THRUST]: 50,
-    },
     poseProfile: {
       idle: {
         [AttackType.QUICK]: { yawStart: 0, yawEnd: 0, reachStart: 0.88, reachEnd: 0.88, liftStart: 0.14, liftEnd: 0.14 },
@@ -104,7 +99,7 @@ export const knight = defineCharacter('knight', {
   },
   clipSpeedFactor: { walk: 1.8, strafe: 2.0, attack: 2.0, backstep: 3.0, knockback: 2.0 },
   clipSpeedOverrides: {
-    attack_quick: 1.525,
+    attack_quick: 1.4,
     attack_heavy: 1.725,
     attack_thrust: 1.525,
     backstep: 1.3,

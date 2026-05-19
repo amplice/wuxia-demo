@@ -3,7 +3,6 @@ import http from 'http';
 import crypto from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { CHARACTER_DEFS, DEFAULT_CHAR } from '../src/entities/CharacterDefs.js';
-import { DEFAULT_STAGE, getStageDef } from '../src/arena/StageDefs.js';
 import {
   FRAME_DURATION,
   FIGHT_START_DISTANCE,
@@ -71,8 +70,8 @@ class MatchRoom {
     const [p1, p2] = this.lobby.players;
     const fighter1 = new FighterSim(0, p1.characterId, CHARACTER_DEFS[p1.characterId]);
     const fighter2 = new FighterSim(1, p2.characterId, CHARACTER_DEFS[p2.characterId]);
-    this.sim = new MatchSim({ fighter1, fighter2, stageId: this.lobby.stageId });
-    this.sim.startRound(getStageDef(this.lobby.stageId).startDistance ?? FIGHT_START_DISTANCE);
+    this.sim = new MatchSim({ fighter1, fighter2 });
+    this.sim.startRound(FIGHT_START_DISTANCE, { swapSides: this.roundNumber % 2 === 0 });
     this.lobby.phase = 'match_running';
     metrics.totalMatchesStarted++;
     log('match_started', {
@@ -83,7 +82,6 @@ class MatchRoom {
         id: player.id,
         characterId: player.characterId,
       })),
-      stageId: this.lobby.stageId,
     });
 
     for (const player of this.lobby.players) {
@@ -94,7 +92,6 @@ class MatchRoom {
       type: ServerMessageType.MATCH_START,
       code: this.lobby.code,
       phase: this.lobby.phase,
-      stageId: this.lobby.stageId,
       roundNumber: this.roundNumber,
       scores: [...this.scores],
       players: this.lobby.players.map((player) => ({
@@ -236,14 +233,12 @@ class LobbyManager {
     this.lobbies = new Map();
   }
 
-  create(client, { visibility = 'private', stageId = DEFAULT_STAGE } = {}) {
+  create(client, { visibility = 'private' } = {}) {
     this._ensureClientFree(client);
     const code = this._generateCode();
-    const stage = getStageDef(stageId);
     const lobby = {
       code,
       visibility,
-      stageId: stage.id,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       phase: 'lobby',
@@ -255,7 +250,6 @@ class LobbyManager {
     log('lobby_created', {
       code,
       visibility,
-      stageId: stage.id,
       hostId: client.id,
     });
     client.lobbyCode = code;
@@ -284,7 +278,7 @@ class LobbyManager {
     return lobby;
   }
 
-  quickMatch(client, stageId = DEFAULT_STAGE) {
+  quickMatch(client) {
     this._ensureClientFree(client);
     const lobby = [...this.lobbies.values()]
       .filter((entry) =>
@@ -298,7 +292,7 @@ class LobbyManager {
       return this.join(client, lobby.code);
     }
 
-    return this.create(client, { visibility: 'public', stageId });
+    return this.create(client, { visibility: 'public' });
   }
 
   listPublicLobbies() {
@@ -572,10 +566,7 @@ wss.on('connection', (socket) => {
     try {
       switch (message.type) {
         case ClientMessageType.CREATE_LOBBY: {
-          const lobby = lobbyManager.create(socket, {
-            visibility: message.visibility ?? 'private',
-            stageId: message.stageId ?? DEFAULT_STAGE,
-          });
+          const lobby = lobbyManager.create(socket, { visibility: message.visibility ?? 'private' });
           broadcastLobby(lobby);
           broadcastPublicLobbyList();
           break;
@@ -590,7 +581,7 @@ wss.on('connection', (socket) => {
           send(socket, createLobbyListPayload(lobbyManager.listPublicLobbies()));
           break;
         case ClientMessageType.QUICK_MATCH: {
-          const lobby = lobbyManager.quickMatch(socket, message.stageId ?? DEFAULT_STAGE);
+          const lobby = lobbyManager.quickMatch(socket);
           broadcastLobby(lobby);
           broadcastPublicLobbyList();
           break;

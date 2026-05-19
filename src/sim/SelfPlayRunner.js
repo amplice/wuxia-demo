@@ -263,7 +263,7 @@ export class SelfPlayRunner {
 
   _runRound({ fighter1, fighter2, ai1, ai2, roundIndex, maxRoundFrames, match, p1ControllerSpec, p2ControllerSpec, p1Char, p2Char }) {
     const sim = new MatchSim({ fighter1, fighter2, hitResolver: this.hitResolver });
-    sim.startRound(FIGHT_START_DISTANCE);
+    sim.startRound(FIGHT_START_DISTANCE, { swapSides: (roundIndex + 1) % 2 === 0 });
     resetControllerInstance(ai1);
     resetControllerInstance(ai2);
 

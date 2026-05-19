@@ -356,7 +356,9 @@ export class AIController {
     const recentSelfClash = frameCount - this._selfLastClashFrame <= 45;
     const heavySpecialist = (p.heavyBias || 0) >= 0.3 || p.heavyMixup >= 0.7;
     const motionRead = this._getOpponentMotionRead(frameCount);
+    const passiveTarget = motionRead.passiveTarget;
     const defensiveWindow = getDefensiveTimingWindow(fighter, opponent);
+    const fighterClassId = getFighterClassId(fighter);
 
     const opponentAttacking = opponent.fsm.isAttacking;
     const opponentRecovering = defensiveWindow.opponentAttack.phase === 'recovery' || defensiveWindow.opponentAttack.lateRecovery;
@@ -611,6 +613,50 @@ export class AIController {
       scores.moveForward = (scores.moveForward || 0) + 0.12;
       scores.backstep = (scores.backstep || 0) + 0.18;
       scores.block = (scores.block || 0) * 0.6;
+    }
+
+    if (fighterClassId === 'huscarl') {
+      const committedAngle = engagement.forwardDot >= 0.72;
+      const axeReady = committedAngle && dist <= Math.max(quickDecisionReach, thrustDecisionReach) + 0.03;
+      const pressureBand = committedAngle && dist <= ranges.engage + 0.25;
+      const opponentGuarding =
+        opponent.state === FighterState.PARRY ||
+        opponent.state === FighterState.PARRY_SUCCESS ||
+        opponent.state === FighterState.BLOCK ||
+        opponent.state === FighterState.BLOCK_STUN;
+
+      if (pressureBand && !opponentAttacking && !opponentVulnerable) {
+        scores.moveBack = (scores.moveBack || 0) * 0.25 - 0.12;
+        scores.backstep = (scores.backstep || 0) * 0.25 - 0.18;
+        scores.sidestep = (scores.sidestep || 0) * 0.55;
+        scores.idle = (scores.idle || 0) - 0.16;
+
+        if (dist > Math.min(quickDecisionReach, thrustDecisionReach) - 0.08) {
+          scores.moveForward = (scores.moveForward || 0) + 0.42 + (p.moveForwardBias || 0);
+        }
+      }
+
+      if (axeReady && !defensiveWindow.shouldDefendNow) {
+        const quickPressure = opponentGuarding ? 0.18 : 0.72;
+        const thrustPressure = opponentGuarding ? 0.16 : 0.48;
+        scores.quickAttack = (scores.quickAttack || 0) +
+          this._scoreAttackOpportunity(fighter, AttackType.QUICK, engagement, quickPressure + (p.quickBias || 0));
+        scores.thrustAttack = (scores.thrustAttack || 0) +
+          this._scoreAttackOpportunity(fighter, AttackType.THRUST, engagement, thrustPressure + (p.thrustBias || 0));
+
+        if (opponent.state === FighterState.BLOCK || opponent.state === FighterState.BLOCK_STUN || recentSelfClash) {
+          scores.heavyAttack = (scores.heavyAttack || 0) +
+            this._scoreAttackOpportunity(fighter, AttackType.HEAVY, engagement, 0.68 + (p.heavyBias || 0));
+        } else if (opponentGuarding) {
+          scores.moveForward = (scores.moveForward || 0) + 0.18;
+          scores.idle = (scores.idle || 0) + 0.1;
+        }
+      }
+
+      if (recentOpponentSidestep && dist <= quickDecisionReach + 0.1 && committedAngle) {
+        scores.quickAttack = (scores.quickAttack || 0) + 0.24;
+        scores.moveForward = (scores.moveForward || 0) + 0.22;
+      }
     }
 
     if (getFighterClassId(fighter) === 'spearman' && inRange && engagement.forwardDot >= 0.72 && !nearEdge && recentOpponentSidestep) {

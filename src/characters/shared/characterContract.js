@@ -61,10 +61,6 @@ function validateWeapon(charId, weapon) {
 
 function validateSim(charId, sim) {
   assertField(sim, `${charId}.sim`);
-  assertField(sim.attackFrames, `${charId}.sim.attackFrames`);
-  for (const attackType of REQUIRED_ATTACK_TYPES) {
-    assertField(sim.attackFrames[attackType], `${charId}.sim.attackFrames.${attackType}`);
-  }
   assertField(sim.poseProfile, `${charId}.sim.poseProfile`);
   assertField(sim.poseProfile.idle, `${charId}.sim.poseProfile.idle`);
   assertField(sim.poseProfile.attack, `${charId}.sim.poseProfile.attack`);

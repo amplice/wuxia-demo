@@ -1,9 +1,5 @@
 import { CHARACTER_DEFS, DEFAULT_CHAR } from '../entities/CharacterDefs.js';
 import { getDefaultMultiplayerWsUrl } from '../net/NetConfig.js';
-import { DEFAULT_STAGE, STAGE_IDS, getStageDef } from '../arena/StageDefs.js';
-import { DEFAULT_STAGE_FX, STAGE_FX_DEFS, getStageFxDef } from '../arena/StageFxDefs.js';
-
-const STORAGE_KEY = 'ringofsteel.select.v1';
 
 export class CharacterSelect {
   constructor() {
@@ -14,24 +10,7 @@ export class CharacterSelect {
     this.difficulty = 'medium';
     this.p1Char = DEFAULT_CHAR;
     this.p2Char = DEFAULT_CHAR;
-    this.stageId = DEFAULT_STAGE;
-    this.stageFxId = DEFAULT_STAGE_FX;
-    this.onStageChange = null;
-    this.onStageFxChange = null;
-
     this.difficultySection = document.getElementById('difficulty-section');
-    this.stageSection = document.getElementById('stage-section');
-    this.stageContainer = document.getElementById('stage-options');
-    this.stagePreview = this.stageSection?.querySelector('.stage-preview') ?? null;
-    this.stageTitle = document.getElementById('stage-preview-title');
-    this.stageDescription = document.getElementById('stage-preview-description');
-    this.stageStats = document.getElementById('stage-preview-stats');
-    this.stageFxSection = document.getElementById('stage-fx-section');
-    this.stageFxContainer = document.getElementById('stage-fx-options');
-    this.stageFxPreview = this.stageFxSection?.querySelector('.stage-fx-preview') ?? null;
-    this.stageFxTitle = document.getElementById('stage-fx-preview-title');
-    this.stageFxDescription = document.getElementById('stage-fx-preview-description');
-    this.stageFxSource = document.getElementById('stage-fx-preview-source');
     this.onlineSection = document.getElementById('online-section');
     this.onlineServerUrl = document.getElementById('online-server-url');
     this.onlineLobbyCode = document.getElementById('online-lobby-code');
@@ -46,6 +25,7 @@ export class CharacterSelect {
     this.onlineRefreshBtn = document.getElementById('online-refresh-btn');
     this.p1Container = document.getElementById('p1-char-options');
     this.p2Container = document.getElementById('p2-char-options');
+    this.p1Heading = document.getElementById('p1-char-heading');
     this.p2Heading = document.getElementById('p2-char-heading');
     this.p2Column = this.p2Heading?.closest('.char-select-column') ?? null;
     this.startBtn = document.getElementById('start-fight-btn');
@@ -67,53 +47,50 @@ export class CharacterSelect {
       this.onlineServerUrl.value = getDefaultMultiplayerWsUrl();
     }
 
-    this._loadPreferences();
-
     this._setupButtons();
     this._buildCharButtons();
-    this._buildStageButtons();
-    this._buildStageFxButtons();
-    this._syncModeButtons();
-    this._syncDifficultyButtons();
     this._updateModeUI();
     this.clearOnlineLobbyInfo();
-    this._updateStagePreview();
-    this._updateStageFxPreview();
   }
 
   _setupButtons() {
-    document.querySelectorAll('#mode-options .select-btn').forEach((btn) => {
+    // Mode buttons
+    document.querySelectorAll('#mode-options .select-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('#mode-options .select-btn').forEach((b) => b.classList.remove('active'));
+        document.querySelectorAll('#mode-options .select-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.mode = btn.dataset.mode;
-        this._savePreferences();
         this._updateModeUI();
         if (this.onModeChange) this.onModeChange(this.mode);
       });
     });
 
-    document.querySelectorAll('#difficulty-options .select-btn').forEach((btn) => {
+    // Difficulty buttons
+    document.querySelectorAll('#difficulty-options .select-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('#difficulty-options .select-btn').forEach((b) => b.classList.remove('active'));
+        document.querySelectorAll('#difficulty-options .select-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.difficulty = btn.dataset.diff;
-        this._savePreferences();
       });
     });
 
+    // Start button
     document.getElementById('start-fight-btn').addEventListener('click', () => {
       if (this._onlineBusy) return;
       if (this.onConfirm) {
-        this.onConfirm(this._buildOnlineConfig());
+        this.onConfirm({
+          mode: this.mode,
+          difficulty: this.difficulty,
+          p1Char: this.p1Char,
+          p2Char: this.p2Char,
+          serverUrl: this.onlineServerUrl?.value?.trim() || '',
+          lobbyCode: this.onlineLobbyCode?.value?.trim().toUpperCase() || '',
+        });
       }
     });
 
     if (this.onlineLobbyCode) {
       this.onlineLobbyCode.addEventListener('input', () => this._updateStartButton());
-    }
-    if (this.onlineServerUrl) {
-      this.onlineServerUrl.addEventListener('change', () => this._savePreferences());
     }
     if (this.onlineHostPublicBtn) {
       this.onlineHostPublicBtn.addEventListener('click', () => {
@@ -159,6 +136,8 @@ export class CharacterSelect {
     if (!this.p1Container || !this.p2Container) return;
 
     const charIds = Object.keys(CHARACTER_DEFS);
+
+    // Hide character section if only one character
     const section = this.p1Container.closest('.select-section');
     if (charIds.length <= 1 && section) {
       section.style.display = 'none';
@@ -174,44 +153,6 @@ export class CharacterSelect {
     }
   }
 
-  _buildStageButtons() {
-    if (!this.stageContainer) return;
-    this.stageContainer.innerHTML = '';
-    for (const id of STAGE_IDS) {
-      const stage = getStageDef(id);
-      const btn = document.createElement('button');
-      btn.className = 'select-btn stage-select-btn' + (id === this.stageId ? ' active' : '');
-      btn.dataset.stage = id;
-      const metrics = stage.ui?.metrics ?? [];
-      const meta = metrics.slice(0, 2).map((item) => `<span>${item.value}</span>`).join('');
-      this._applyStageTheme(btn, stage);
-      btn.innerHTML = `
-        <span class="stage-select-name">${stage.name}</span>
-        <span class="stage-select-tag">${stage.tagline}</span>
-        <span class="stage-select-meta">${meta}</span>
-      `;
-      btn.addEventListener('click', () => this.setStage(id));
-      this.stageContainer.appendChild(btn);
-    }
-    this._updateStageButtons();
-  }
-
-  _buildStageFxButtons() {
-    if (!this.stageFxContainer) return;
-    this.stageFxContainer.innerHTML = '';
-    for (const effect of STAGE_FX_DEFS) {
-      const btn = document.createElement('button');
-      btn.className = 'select-btn stage-fx-btn' + (effect.id === this.stageFxId ? ' active' : '');
-      btn.dataset.stageFx = effect.id;
-      btn.innerHTML = `
-        <span class="stage-fx-name">${effect.name}</span>
-        <span class="stage-fx-tag">${effect.tagline}</span>
-      `;
-      btn.addEventListener('click', () => this.setStageFx(effect.id));
-      this.stageFxContainer.appendChild(btn);
-    }
-  }
-
   _createCharButton(id, label, playerIndex) {
     const btn = document.createElement('button');
     btn.className = 'select-btn';
@@ -223,99 +164,27 @@ export class CharacterSelect {
 
     btn.addEventListener('click', () => {
       const container = playerIndex === 1 ? this.p1Container : this.p2Container;
-      container.querySelectorAll('.select-btn').forEach((b) => b.classList.remove('active'));
+      container.querySelectorAll('.select-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       if (playerIndex === 1) {
         this.p1Char = id;
       } else {
         this.p2Char = id;
       }
-      this._savePreferences();
     });
 
     return btn;
   }
 
-  setStage(stageId, { silent = false } = {}) {
-    const stage = getStageDef(stageId);
-    this.stageId = stage.id;
-    if (this.stageContainer) {
-      this.stageContainer.querySelectorAll('[data-stage]').forEach((btn) => {
-        btn.classList.toggle('active', btn.dataset.stage === stage.id);
-      });
-    }
-    this._updateStagePreview();
-    this._updateStageFxPreview();
-    this._savePreferences();
-    if (!silent && this.onStageChange) {
-      this.onStageChange(stage.id);
-    }
-  }
-
-  setStageFx(stageFxId, { silent = false } = {}) {
-    const effect = getStageFxDef(stageFxId);
-    this.stageFxId = effect.id;
-    if (this.stageFxContainer) {
-      this.stageFxContainer.querySelectorAll('[data-stage-fx]').forEach((btn) => {
-        btn.classList.toggle('active', btn.dataset.stageFx === effect.id);
-      });
-    }
-    this._updateStageFxPreview();
-    this._savePreferences();
-    if (!silent && this.onStageFxChange) {
-      this.onStageFxChange(effect.id);
-    }
-  }
-
-  _syncModeButtons() {
-    document.querySelectorAll('#mode-options .select-btn').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.mode === this.mode);
-    });
-  }
-
-  _syncDifficultyButtons() {
-    document.querySelectorAll('#difficulty-options .select-btn').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.diff === this.difficulty);
-    });
-  }
-
-  _updateStagePreview() {
-    const stage = getStageDef(this.stageId);
-    if (this.stageTitle) this.stageTitle.textContent = stage.name;
-    if (this.stageDescription) this.stageDescription.textContent = stage.description;
-    if (this.stageStats) {
-      const metrics = stage.ui?.metrics ?? [];
-      this.stageStats.innerHTML = metrics.map((metric) => `
-        <div class="stage-stat">
-          <span class="stage-stat-label">${metric.label}</span>
-          <span class="stage-stat-value">${metric.value}</span>
-        </div>
-      `).join('');
-    }
-    if (this.stagePreview) this._applyStageTheme(this.stagePreview, stage);
-    if (this.stageSection) this._applyStageTheme(this.stageSection, stage);
-  }
-
-  _updateStageFxPreview() {
-    const effect = getStageFxDef(this.stageFxId);
-    if (this.stageFxTitle) this.stageFxTitle.textContent = effect.name;
-    if (this.stageFxDescription) this.stageFxDescription.textContent = effect.description;
-    if (this.stageFxSource) this.stageFxSource.textContent = effect.sourceHint;
-    if (this.stageFxPreview) this._applyStageTheme(this.stageFxPreview, getStageDef(this.stageId));
-    if (this.stageFxSection) this._applyStageTheme(this.stageFxSection, getStageDef(this.stageId));
-  }
-
-  _updateStageButtons() {
-    const disabled = this.mode === 'online' && this._onlineLocked;
-    this.stageContainer?.querySelectorAll('[data-stage]').forEach((btn) => {
-      btn.disabled = disabled;
-    });
-  }
-
   _updateOpponentLabel() {
+    if (this.p1Heading) {
+      this.p1Heading.textContent = this.mode === 'watch' ? 'AI 1 Character' : 'Player 1 Character';
+    }
     if (!this.p2Heading) return;
     this.p2Heading.textContent = this.mode === 'ai'
       ? 'Computer Character'
+      : this.mode === 'watch'
+        ? 'AI 2 Character'
       : this.mode === 'online'
         ? 'Opponent Character'
         : 'Player 2 Character';
@@ -323,7 +192,7 @@ export class CharacterSelect {
 
   _updateModeUI() {
     if (this.difficultySection) {
-      this.difficultySection.style.display = this.mode === 'ai' ? 'block' : 'none';
+      this.difficultySection.style.display = (this.mode === 'ai' || this.mode === 'watch') ? 'block' : 'none';
     }
     if (this.onlineSection) {
       this.onlineSection.style.display = this.mode === 'online' ? 'block' : 'none';
@@ -335,14 +204,13 @@ export class CharacterSelect {
       this._updateStartButton();
     }
     this._updateOnlineButtons();
-    this._updateStageButtons();
     this._updateOpponentLabel();
   }
 
   _updateStartButton() {
     if (!this.startBtn) return;
     if (this.mode !== 'online') {
-      this.startBtn.textContent = 'FIGHT';
+      this.startBtn.textContent = this.mode === 'watch' ? 'WATCH' : 'FIGHT';
       this.startBtn.disabled = false;
       if (this.onlineLeaveBtn) this.onlineLeaveBtn.style.display = 'none';
       return;
@@ -388,7 +256,6 @@ export class CharacterSelect {
       difficulty: this.difficulty,
       p1Char: this.p1Char,
       p2Char: this.p2Char,
-      stageId: this.stageId,
       serverUrl: this.onlineServerUrl?.value?.trim() || '',
       lobbyCode: this.onlineLobbyCode?.value?.trim().toUpperCase() || '',
     };
@@ -415,14 +282,12 @@ export class CharacterSelect {
       const row = document.createElement('div');
       row.className = 'online-lobby-row';
 
-      const stage = getStageDef(lobby.stageId);
       const main = document.createElement('div');
       main.className = 'online-lobby-main';
       main.innerHTML = `
         <span class="emphasis">${lobby.code}</span>
         <span>${lobby.playerCount}/${lobby.maxPlayers} Players</span>
         <span>${String(lobby.hostCharacterId || 'unknown').replace('_', ' ')}</span>
-        <span>${stage.name}</span>
       `;
 
       const joinBtn = document.createElement('button');
@@ -462,9 +327,6 @@ export class CharacterSelect {
     const players = Array.isArray(detail?.players) ? detail.players : [];
     this._setOnlineSlotState(this.onlineLobbySlot1, players.find((player) => player.slot === 0) ?? null, 0);
     this._setOnlineSlotState(this.onlineLobbySlot2, players.find((player) => player.slot === 1) ?? null, 1);
-    if (detail?.stageId) {
-      this.setStage(detail.stageId, { silent: true });
-    }
   }
 
   clearOnlineLobbyInfo() {
@@ -491,7 +353,6 @@ export class CharacterSelect {
     this._onlineBusy = Boolean(busy);
     this._updateStartButton();
     this._updateOnlineButtons();
-    this._updateStageButtons();
     this._renderPublicLobbies();
   }
 
@@ -501,7 +362,6 @@ export class CharacterSelect {
     if (this.onlineLobbyCode) this.onlineLobbyCode.readOnly = this._onlineLocked;
     this._updateStartButton();
     this._updateOnlineButtons();
-    this._updateStageButtons();
     this._renderPublicLobbies();
   }
 
@@ -513,14 +373,12 @@ export class CharacterSelect {
     this.clearOnlineLobbyInfo();
     this._updateStartButton();
     this._updateOnlineButtons();
-    this._updateStageButtons();
     this._renderPublicLobbies();
   }
 
   show() {
     this.el.style.display = 'flex';
     this._updateModeUI();
-    this._updateStagePreview();
     this._setControlsOpen(false);
     window.addEventListener('keydown', this._keyHandler);
   }
@@ -536,63 +394,9 @@ export class CharacterSelect {
     this.controlsModal.classList.toggle('open', open);
   }
 
-  _loadPreferences() {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const saved = JSON.parse(raw);
-      if (saved.mode === 'ai' || saved.mode === 'pvp' || saved.mode === 'online') {
-        this.mode = saved.mode;
-      }
-      if (saved.difficulty === 'easy' || saved.difficulty === 'medium' || saved.difficulty === 'hard') {
-        this.difficulty = saved.difficulty;
-      }
-      if (typeof saved.p1Char === 'string' && CHARACTER_DEFS[saved.p1Char]) {
-        this.p1Char = saved.p1Char;
-      }
-      if (typeof saved.p2Char === 'string' && CHARACTER_DEFS[saved.p2Char]) {
-        this.p2Char = saved.p2Char;
-      }
-      this.stageId = getStageDef(saved.stageId).id;
-      this.stageFxId = getStageFxDef(saved.stageFxId).id;
-      if (typeof saved.serverUrl === 'string' && this.onlineServerUrl) {
-        this.onlineServerUrl.value = saved.serverUrl;
-      }
-    } catch {
-      // Ignore malformed local preferences and fall back to defaults.
-    }
-  }
-
-  _savePreferences() {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        mode: this.mode,
-        difficulty: this.difficulty,
-        p1Char: this.p1Char,
-        p2Char: this.p2Char,
-        stageId: this.stageId,
-        stageFxId: this.stageFxId,
-        serverUrl: this.onlineServerUrl?.value?.trim() || '',
-      }));
-    } catch {
-      // Ignore storage failures.
-    }
-  }
-
   _onKey(e) {
     if (e.code === 'Escape' && this.controlsModal?.classList.contains('open')) {
       this._setControlsOpen(false);
     }
-  }
-
-  _applyStageTheme(el, stage) {
-    if (!el || !stage?.ui) return;
-    el.style.setProperty('--stage-accent', stage.ui.accent);
-    el.style.setProperty('--stage-accent-soft', stage.ui.accentSoft);
-    el.style.setProperty('--stage-panel-top', stage.ui.panelTop);
-    el.style.setProperty('--stage-panel-bottom', stage.ui.panelBottom);
-    el.style.setProperty('--stage-border', stage.ui.border);
-    el.style.setProperty('--stage-glow', stage.ui.glow);
-    el.style.setProperty('--stage-muted', stage.ui.muted);
   }
 }

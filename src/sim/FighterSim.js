@@ -173,7 +173,7 @@ export class FighterSim extends FighterCore {
     if (authoritativeClip?.frameCount) {
       return authoritativeClip.frameCount;
     }
-    return this.charDef.sim?.attackFrames?.[attackType] ?? 30;
+    throw new Error(`Missing authoritative attack clip '${clipName}' for ${this.charId}`);
   }
 
   _getAttackClipName(attackType = this.currentAttackType) {

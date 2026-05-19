@@ -10,13 +10,13 @@ export class HUD {
     this.onlineStatus = document.getElementById('online-hud-status');
     this.onlineCode = document.getElementById('online-hud-code');
     this.onlinePing = document.getElementById('online-hud-ping');
-    this.stageBadge = document.getElementById('stage-hud-badge');
-    this.stageName = document.getElementById('stage-hud-name');
-    this.stageTagline = document.getElementById('stage-hud-tagline');
+    this.p1Name = document.querySelector('.fighter-hud.p1 .fighter-name');
+    this.p2Name = document.querySelector('.fighter-hud.p2 .fighter-name');
   }
 
   show() {
     this.el.style.display = 'block';
+    // Hide removed elements if they still exist in DOM
     const hide = (id) => { const el = document.getElementById(id); if (el) el.style.display = 'none'; };
     hide('p1-stance');
     hide('p2-stance');
@@ -36,23 +36,9 @@ export class HUD {
     this.onlinePing.textContent = Number.isFinite(pingMs) ? `${Math.round(pingMs)} ms` : '--';
   }
 
-  setStage(stage = null) {
-    if (!this.stageBadge || !this.stageName || !this.stageTagline) return;
-    if (!stage) {
-      this.stageBadge.style.display = 'none';
-      return;
-    }
-    this.stageBadge.style.display = 'block';
-    this.stageName.textContent = stage.name;
-    this.stageTagline.textContent = stage.tagline;
-    if (stage.ui) {
-      this.stageBadge.style.setProperty('--stage-accent', stage.ui.accent);
-      this.stageBadge.style.setProperty('--stage-border', stage.ui.border);
-      this.stageBadge.style.setProperty('--stage-panel-top', stage.ui.panelTop);
-      this.stageBadge.style.setProperty('--stage-panel-bottom', stage.ui.panelBottom);
-      this.stageBadge.style.setProperty('--stage-glow', stage.ui.glow);
-      this.stageBadge.style.setProperty('--stage-muted', stage.ui.muted);
-    }
+  setFighterNames(p1Name = 'PLAYER 1', p2Name = 'PLAYER 2') {
+    if (this.p1Name) this.p1Name.textContent = p1Name;
+    if (this.p2Name) this.p2Name.textContent = p2Name;
   }
 
   updateRoundPips(p1Wins, p2Wins) {
