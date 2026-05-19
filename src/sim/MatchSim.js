@@ -66,16 +66,20 @@ export class MatchSim {
       controller2 = null,
     } = options;
 
-    if (controller1) {
-      controller1(this.fighter1, this.fighter2, this, dt);
-    } else if (input1) {
-      this.applyInputFrame(this.fighter1, this.fighter2, input1, dt);
-    }
+    if (controller1 && controller2) {
+      this._stepSimultaneousControllers(controller1, controller2, dt);
+    } else {
+      if (controller1) {
+        controller1(this.fighter1, this.fighter2, this, dt);
+      } else if (input1) {
+        this.applyInputFrame(this.fighter1, this.fighter2, input1, dt);
+      }
 
-    if (controller2) {
-      controller2(this.fighter2, this.fighter1, this, dt);
-    } else if (input2) {
-      this.applyInputFrame(this.fighter2, this.fighter1, input2, dt);
+      if (controller2) {
+        controller2(this.fighter2, this.fighter1, this, dt);
+      } else if (input2) {
+        this.applyInputFrame(this.fighter2, this.fighter1, input2, dt);
+      }
     }
 
     this.fighter1.update(dt, this.fighter2);
@@ -91,6 +95,77 @@ export class MatchSim {
     this._clampToArenaIfNeeded(this.fighter2);
 
     return this._flushStepResult();
+  }
+
+  _stepSimultaneousControllers(controller1, controller2, dt) {
+    const pre1 = this._captureControllerStepState(this.fighter1);
+    const pre2 = this._captureControllerStepState(this.fighter2);
+
+    controller1(this.fighter1, this.fighter2, this, dt);
+    const post1 = this._captureControllerStepState(this.fighter1);
+
+    // Let controller2 reason against the same pre-frame opponent state that
+    // controller1 saw. Without this, the second controller gets a same-frame
+    // read on controller1's newly committed attack/block/sidestep.
+    this._restoreControllerStepState(this.fighter1, pre1);
+    this._restoreControllerStepState(this.fighter2, pre2);
+    controller2(this.fighter2, this.fighter1, this, dt);
+    const post2 = this._captureControllerStepState(this.fighter2);
+
+    this._restoreControllerStepState(this.fighter1, post1);
+    this._restoreControllerStepState(this.fighter2, post2);
+  }
+
+  _captureControllerStepState(fighter) {
+    return {
+      position: fighter.position.clone(),
+      rotationY: fighter.group.rotation.y,
+      facingRight: fighter.facingRight,
+      state: fighter.fsm.state,
+      stateFrames: fighter.fsm.stateFrames,
+      stateDuration: fighter.fsm.stateDuration,
+      currentAttackData: fighter.fsm.currentAttackData ? { ...fighter.fsm.currentAttackData } : null,
+      currentAttackType: fighter.fsm.currentAttackType,
+      hitApplied: fighter.fsm.hitApplied,
+      sidestepDirection: fighter.fsm.sidestepDirection,
+      sidestepPhase: fighter.fsm.sidestepPhase,
+      parryCooldownFrames: fighter.fsm.parryCooldownFrames,
+      stepping: fighter._stepping,
+      stepFrames: fighter._stepFrames,
+      stepDirection: fighter._stepDirection,
+      stepCooldown: fighter._stepCooldown,
+      slideMult: fighter.slideMult,
+      blockPushRemaining: fighter.blockPushRemaining,
+      walkPhase: fighter.walkPhase,
+      activeClipName: fighter.activeClipName,
+      postAttackTurnTime: fighter._postAttackTurnTime,
+      wasAttacking: fighter._wasAttacking,
+    };
+  }
+
+  _restoreControllerStepState(fighter, snapshot) {
+    fighter.position.copy(snapshot.position);
+    fighter.group.rotation.y = snapshot.rotationY;
+    fighter.facingRight = snapshot.facingRight;
+    fighter.fsm.state = snapshot.state;
+    fighter.fsm.stateFrames = snapshot.stateFrames;
+    fighter.fsm.stateDuration = snapshot.stateDuration;
+    fighter.fsm.currentAttackData = snapshot.currentAttackData ? { ...snapshot.currentAttackData } : null;
+    fighter.fsm.currentAttackType = snapshot.currentAttackType;
+    fighter.fsm.hitApplied = snapshot.hitApplied;
+    fighter.fsm.sidestepDirection = snapshot.sidestepDirection;
+    fighter.fsm.sidestepPhase = snapshot.sidestepPhase;
+    fighter.fsm.parryCooldownFrames = snapshot.parryCooldownFrames;
+    fighter._stepping = snapshot.stepping;
+    fighter._stepFrames = snapshot.stepFrames;
+    fighter._stepDirection = snapshot.stepDirection;
+    fighter._stepCooldown = snapshot.stepCooldown;
+    fighter.slideMult = snapshot.slideMult;
+    fighter.blockPushRemaining = snapshot.blockPushRemaining;
+    fighter.walkPhase = snapshot.walkPhase;
+    fighter.activeClipName = snapshot.activeClipName;
+    fighter._postAttackTurnTime = snapshot.postAttackTurnTime;
+    fighter._wasAttacking = snapshot.wasAttacking;
   }
 
   applyInputFrame(fighter, opponent, input, dt) {
@@ -226,16 +301,35 @@ export class MatchSim {
       this.fighter1.fsm.isAttacking &&
       this.fighter2.fsm.isAttacking &&
       !this.fighter1.hitApplied &&
-      !this.fighter2.hitApplied &&
-      this.hitResolver.checkWeaponClash(this.fighter1, this.fighter2)
+      !this.fighter2.hitApplied
     ) {
-      this._applyResolvedHit(this.fighter1, this.fighter2, {
-        result: HitResult.CLASH,
-        attackerType: this.fighter1.fsm.currentAttackType,
-        defenderType: this.fighter2.fsm.currentAttackType,
-      });
-      this.fighter1.hitApplied = true;
-      this.fighter2.hitApplied = true;
+      const weaponsClash = this.hitResolver.checkWeaponClash(this.fighter1, this.fighter2);
+      const fighter1BodyHit = !weaponsClash && this.hitResolver.checkSwordCollision(this.fighter1, this.fighter2);
+      const fighter2BodyHit = !weaponsClash && this.hitResolver.checkSwordCollision(this.fighter2, this.fighter1);
+
+      if (weaponsClash || (fighter1BodyHit && fighter2BodyHit)) {
+        this._applyResolvedHit(this.fighter1, this.fighter2, {
+          result: HitResult.CLASH,
+          attackerType: this.fighter1.fsm.currentAttackType,
+          defenderType: this.fighter2.fsm.currentAttackType,
+        });
+        this.fighter1.hitApplied = true;
+        this.fighter2.hitApplied = true;
+        return;
+      }
+
+      if (fighter1BodyHit) {
+        this._resolveHit(this.fighter1, this.fighter2);
+        this.fighter1.hitApplied = true;
+        return;
+      }
+
+      if (fighter2BodyHit) {
+        this._resolveHit(this.fighter2, this.fighter1);
+        this.fighter2.hitApplied = true;
+        return;
+      }
+
       return;
     }
 

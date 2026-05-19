@@ -181,6 +181,60 @@ function testContactWindows() {
   }
 }
 
+function testSimultaneousControllerScheduling() {
+  const sim = new MatchSim({
+    fighter1: createFighter('ronin', 0),
+    fighter2: createFighter('ronin', 1),
+  });
+  sim.startRound();
+
+  let controller1Calls = 0;
+  let controller2Calls = 0;
+  let controller2ObservedOpponentState = null;
+
+  sim.step(FRAME_DURATION, {
+    controller1: (fighter) => {
+      controller1Calls++;
+      fighter.attack(AttackType.QUICK);
+    },
+    controller2: (fighter, opponent) => {
+      controller2Calls++;
+      controller2ObservedOpponentState = opponent.state;
+    },
+  });
+
+  assert.equal(controller1Calls, 1, 'controller1 should run once per frame');
+  assert.equal(controller2Calls, 1, 'controller2 should run once per frame');
+  assert.equal(
+    controller2ObservedOpponentState,
+    FighterState.IDLE,
+    'controller2 should not see controller1 same-frame decisions',
+  );
+}
+
+function testSimultaneousBodyHitsClash() {
+  const hitResolver = {
+    checkWeaponClash: () => false,
+    checkSwordCollision: () => true,
+    resolve: () => {
+      throw new Error('mutual body hits should resolve as a clash before one-sided resolve');
+    },
+  };
+  const sim = new MatchSim({
+    fighter1: createFighter('huscarl', 0),
+    fighter2: createFighter('huscarl', 1),
+    hitResolver,
+  });
+
+  setAttackState(sim.fighter1, AttackType.QUICK);
+  setAttackState(sim.fighter2, AttackType.QUICK);
+  sim._checkHits();
+
+  assert.equal(sim.fighter1.hitApplied, true, 'fighter1 mutual body hit should be consumed');
+  assert.equal(sim.fighter2.hitApplied, true, 'fighter2 mutual body hit should be consumed');
+  assert.equal(sim.events[0]?.result, HitResult.CLASH, 'mutual same-frame body hits should clash');
+}
+
 const TESTS = [
   ['parry window', testParryWindow],
   ['parried stun scaling', testParriedStunScaling],
@@ -189,6 +243,8 @@ const TESTS = [
   ['ring-out resolution', testRingOutResolution],
   ['authoritative track sync', testAuthoritativeTrackSync],
   ['contact windows', testContactWindows],
+  ['simultaneous controller scheduling', testSimultaneousControllerScheduling],
+  ['simultaneous body hits', testSimultaneousBodyHitsClash],
 ];
 
 function main() {
