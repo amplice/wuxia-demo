@@ -216,7 +216,7 @@ export class PlannerAIController extends AIController {
       return { entry, weight };
     });
     const total = weighted.reduce((sum, item) => sum + item.weight, 0);
-    let roll = Math.random() * total;
+    let roll = this._random() * total;
     for (const item of weighted) {
       roll -= item.weight;
       if (roll <= 0) return item.entry;
@@ -460,7 +460,7 @@ export class PlannerAIController extends AIController {
       if (!opponentBusy && dist > 2.0 && !motionRead.recentApproach) actions.delete('quickAttack');
       actions.delete('heavyAttack');
       if (!vulnerable && !blocking && !motionRead.recentLateralThreat) actions.delete('thrustAttack');
-      if (!vulnerable && !blocking && !motionRead.recentApproach && Math.random() < 0.2) actions.delete('quickAttack');
+      if (!vulnerable && !blocking && !motionRead.recentApproach && this._random() < 0.2) actions.delete('quickAttack');
     }
 
     if (opponentClassId !== 'huscarl') return;

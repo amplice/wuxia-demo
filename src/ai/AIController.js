@@ -22,6 +22,7 @@ const AI_PARRY_PUNISH_DELAY_MIN = 2;
 const AI_PARRY_PUNISH_DELAY_MAX = 5;
 const PASSIVE_TARGET_FRAMES = 42;
 const PASSIVE_TARGET_STRONG_FRAMES = 96;
+let AI_RNG_SEQUENCE = 0;
 
 function isOpponentActiveState(state) {
   return state === FighterState.WALK_FORWARD ||
@@ -41,6 +42,15 @@ function isOpponentActiveState(state) {
 
 function getFighterClassId(fighter) {
   return fighter?.charDef?.id ?? fighter?.charId ?? null;
+}
+
+function hashString(value) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }
 
 export class AIController {
@@ -84,6 +94,17 @@ export class AIController {
     this._plannedAttack = null;
     this._parryPunishReadyFrame = -9999;
     this._parryPunishDelayFrames = 0;
+    this._rngState = (
+      Math.floor(Math.random() * 0x100000000) ^
+      hashString(String(profile)) ^
+      Math.imul(++AI_RNG_SEQUENCE, 0x9e3779b9)
+    ) >>> 0;
+    if (this._rngState === 0) this._rngState = 0x6d2b79f5;
+  }
+
+  _random() {
+    this._rngState = (Math.imul(1664525, this._rngState) + 1013904223) >>> 0;
+    return this._rngState / 0x100000000;
   }
 
   setDifficulty(profile) {
@@ -219,7 +240,7 @@ export class AIController {
         // Human-facing punish advantage mostly comes from the opponent's
         // PARRIED_STUN, but the AI still uses this state to time ripostes.
         this._parryPunishDelayFrames =
-          AI_PARRY_PUNISH_DELAY_MIN + Math.floor(Math.random() * (AI_PARRY_PUNISH_DELAY_MAX - AI_PARRY_PUNISH_DELAY_MIN + 1));
+          AI_PARRY_PUNISH_DELAY_MIN + Math.floor(this._random() * (AI_PARRY_PUNISH_DELAY_MAX - AI_PARRY_PUNISH_DELAY_MIN + 1));
         this._parryPunishReadyFrame = frameCount + this._parryPunishDelayFrames;
       }
       this._selfLastState = state;
@@ -265,11 +286,11 @@ export class AIController {
     if (!fighter.fsm.isActionable) return false;
 
     if (opponent.state === FighterState.ATTACK_ACTIVE && this._opponentLastState !== FighterState.ATTACK_ACTIVE) {
-      return Math.random() < (p.parryRate + p.dodgeRate) * 0.5;
+      return this._random() < (p.parryRate + p.dodgeRate) * 0.5;
     }
 
     if (fighter.state === FighterState.PARRY_SUCCESS) {
-      return Math.random() < p.counterRate;
+      return this._random() < p.counterRate;
     }
 
     return false;
@@ -334,7 +355,7 @@ export class AIController {
     if (!fighter.fsm.isActionable) return;
 
     const dist = fighter.distanceTo(opponent);
-    const noise = () => (Math.random() - 0.5) * p.decisionNoise;
+    const noise = () => (this._random() - 0.5) * p.decisionNoise;
     const engagement = this._getEngagementContext(fighter, opponent, dist);
 
     const edgeRoom = getArenaEdgeDistance(fighter.position.x, fighter.position.z);
@@ -408,14 +429,14 @@ export class AIController {
       );
 
     if (fighter.state === FighterState.PARRY_SUCCESS) {
-      if (Math.random() < p.counterRate) {
+      if (this._random() < p.counterRate) {
         scores.quickAttack = this._scoreAttackOpportunity(fighter, AttackType.QUICK, engagement, 2.0 + (p.quickBias || 0));
         scores.thrustAttack = this._scoreAttackOpportunity(fighter, AttackType.THRUST, engagement, 1.5 + (p.thrustBias || 0));
       }
     }
 
     if (opponentVulnerable && inRange) {
-      if (Math.random() < p.punishRate) {
+      if (this._random() < p.punishRate) {
         scores.quickAttack = (scores.quickAttack || 0) +
           this._scoreAttackOpportunity(fighter, AttackType.QUICK, engagement, 1.5 + (p.quickBias || 0) + noise());
         scores.thrustAttack = (scores.thrustAttack || 0) +
@@ -426,7 +447,7 @@ export class AIController {
     }
 
     if (opponentVulnerable && !inRange && dist < ranges.engage + 1.5) {
-      if (Math.random() < p.punishRate) {
+      if (this._random() < p.punishRate) {
         scores.moveForward = (scores.moveForward || 0) + 1.2 + (p.moveForwardBias || 0);
       }
     }
@@ -983,7 +1004,7 @@ export class AIController {
 
     const weights = candidates.map(([, score]) => Math.max(0.01, score - (bestScore - 0.12) + 0.02));
     const total = weights.reduce((sum, value) => sum + value, 0);
-    let roll = Math.random() * total;
+    let roll = this._random() * total;
     for (let i = 0; i < candidates.length; i++) {
       roll -= weights[i];
       if (roll <= 0) return candidates[i][0];
@@ -1064,7 +1085,7 @@ export class AIController {
         this.currentAction = null;
         break;
       case 'sidestep':
-        this.sideDir = Math.random() > 0.5 ? 1 : -1;
+        this.sideDir = this._random() > 0.5 ? 1 : -1;
         fighter.sidestep(this.sideDir);
         this.currentAction = null;
         break;

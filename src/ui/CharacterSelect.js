@@ -1,5 +1,6 @@
 import { CHARACTER_DEFS, DEFAULT_CHAR } from '../entities/CharacterDefs.js';
 import { getDefaultMultiplayerWsUrl } from '../net/NetConfig.js';
+import { DEFAULT_STAGE, STAGE_DEFS, normalizeStageId } from '../arena/StageDefs.js';
 
 export class CharacterSelect {
   constructor() {
@@ -8,9 +9,11 @@ export class CharacterSelect {
 
     this.mode = 'ai';
     this.difficulty = 'medium';
+    this.stageId = DEFAULT_STAGE;
     this.p1Char = DEFAULT_CHAR;
     this.p2Char = DEFAULT_CHAR;
     this.difficultySection = document.getElementById('difficulty-section');
+    this.stageContainer = document.getElementById('stage-options');
     this.onlineSection = document.getElementById('online-section');
     this.onlineServerUrl = document.getElementById('online-server-url');
     this.onlineLobbyCode = document.getElementById('online-lobby-code');
@@ -48,6 +51,7 @@ export class CharacterSelect {
     }
 
     this._setupButtons();
+    this._buildStageButtons();
     this._buildCharButtons();
     this._updateModeUI();
     this.clearOnlineLobbyInfo();
@@ -81,6 +85,7 @@ export class CharacterSelect {
         this.onConfirm({
           mode: this.mode,
           difficulty: this.difficulty,
+          stageId: this.stageId,
           p1Char: this.p1Char,
           p2Char: this.p2Char,
           serverUrl: this.onlineServerUrl?.value?.trim() || '',
@@ -190,6 +195,25 @@ export class CharacterSelect {
         : 'Player 2 Character';
   }
 
+  _buildStageButtons() {
+    if (!this.stageContainer) return;
+    this.stageContainer.innerHTML = '';
+    for (const [id, stage] of Object.entries(STAGE_DEFS)) {
+      const btn = document.createElement('button');
+      btn.className = 'select-btn';
+      btn.dataset.stage = id;
+      btn.textContent = stage.displayName.toUpperCase();
+      btn.title = stage.description ?? stage.displayName;
+      if (id === this.stageId) btn.classList.add('active');
+      btn.addEventListener('click', () => {
+        this.stageContainer.querySelectorAll('.select-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.stageId = normalizeStageId(id);
+      });
+      this.stageContainer.appendChild(btn);
+    }
+  }
+
   _updateModeUI() {
     if (this.difficultySection) {
       this.difficultySection.style.display = (this.mode === 'ai' || this.mode === 'watch') ? 'block' : 'none';
@@ -254,6 +278,7 @@ export class CharacterSelect {
     return {
       mode: this.mode,
       difficulty: this.difficulty,
+      stageId: this.stageId,
       p1Char: this.p1Char,
       p2Char: this.p2Char,
       serverUrl: this.onlineServerUrl?.value?.trim() || '',

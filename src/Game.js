@@ -21,6 +21,7 @@ import { OnlineSession } from './net/OnlineSession.js';
 import { SoundManager } from './audio/SoundManager.js';
 import { listAudioAssets } from './audio/AudioCatalog.js';
 import { GameAudio } from './audio/GameAudio.js';
+import { DEFAULT_STAGE, normalizeStageId } from './arena/StageDefs.js';
 import {
   GameState, HitResult,
   FIGHT_START_DISTANCE, ROUNDS_TO_WIN, ROUND_INTRO_DURATION,
@@ -90,6 +91,7 @@ export class Game {
     // Match state
     this.mode = 'ai';
     this.difficulty = 'medium';
+    this.currentStageId = DEFAULT_STAGE;
     this.p1Score = 0;
     this.p2Score = 0;
     this.currentRound = 1;
@@ -108,7 +110,8 @@ export class Game {
     this.cameraController = new CameraController();
     this.camera = this.cameraController.camera;
 
-    this.arena = new Arena(this.scene);
+    this.arena = new Arena(this.scene, this.currentStageId);
+    await this.arena.setStage(this.currentStageId);
     this.environment = new Environment(this.scene);
     this.particles = new ParticleSystem(this.scene);
     this.debugOverlay = new DebugOverlay(this.scene);
@@ -157,11 +160,12 @@ export class Game {
       this.sound.unlock().catch(() => {});
       this.mode = config.mode;
       this.difficulty = config.difficulty;
+      this.currentStageId = normalizeStageId(config.stageId);
       if (config.mode === 'online') {
         await this._startOnlineSession(config);
         return;
       }
-      this._startMatch(config.p1Char, config.p2Char);
+      await this._startMatch(config.p1Char, config.p2Char);
     };
     this.ui.select.onModeChange = async (mode) => {
       if (mode === 'online') {
@@ -219,9 +223,10 @@ export class Game {
     return { animData, charDef: def, resolvedId: id };
   }
 
-  _startMatch(p1Char, p2Char) {
+  async _startMatch(p1Char, p2Char) {
     this._disconnectOnlineSession();
     this._resetMatchScoreState();
+    await this.arena?.setStage(this.currentStageId);
 
     const { p1, p2 } = this._spawnFighters(p1Char, p2Char);
 
@@ -253,6 +258,7 @@ export class Game {
     this.matchSim = new MatchSim({
       fighter1: this.fighter1,
       fighter2: this.fighter2,
+      stageId: this.currentStageId,
     });
 
     this.ui.showHUD();
@@ -571,7 +577,9 @@ export class Game {
       this._handleOnlineLobbyState(event.detail);
     });
     session.addEventListener('match_start', (event) => {
-      this._handleOnlineMatchStart(event.detail);
+      this._handleOnlineMatchStart(event.detail).catch((error) => {
+        console.warn('[online] failed to start match', error);
+      });
     });
     session.addEventListener('state_snapshot', (event) => {
       this._handleOnlineStateSnapshot(event.detail?.snapshot);
@@ -624,7 +632,7 @@ export class Game {
     }
   }
 
-  _handleOnlineMatchStart(detail) {
+  async _handleOnlineMatchStart(detail) {
     if (!detail?.players) return;
     this.onlineMatchPlayers = detail.players;
     this.currentRound = detail.roundNumber ?? this.currentRound;
@@ -637,11 +645,12 @@ export class Game {
     if (self) {
       this.onlineLocalSlot = self.slot;
     }
-    this._startOnlineMatch(detail.players, detail.snapshot);
+    await this._startOnlineMatch(detail.players, detail.snapshot);
   }
 
-  _startOnlineMatch(players, snapshot = null) {
+  async _startOnlineMatch(players, snapshot = null) {
     this._resetCombatPresentation();
+    await this.arena?.setStage(this.currentStageId);
 
     const sortedPlayers = [...players].sort((a, b) => a.slot - b.slot);
     const p1 = sortedPlayers[0];
